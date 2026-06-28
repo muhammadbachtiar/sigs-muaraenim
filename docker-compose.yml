@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: sigs_muaraenim_app
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@db:5432/sigs_muaraenim?schema=public
+      - NEXTAUTH_SECRET=rahasiasuperadmin123
+      - NEXTAUTH_URL=http://localhost:3000
+      - SUPER_ADMIN_USERNAME=admin
+      - SUPER_ADMIN_PASSWORD=admin123
+    volumes:
+      - ./uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgis/postgis:15-3.3
+    container_name: sigs_muaraenim_db
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=sigs_muaraenim
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

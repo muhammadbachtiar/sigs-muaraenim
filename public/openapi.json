@@ -1,0 +1,1024 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "SIGS Muara Enim API Documentation",
+    "description": "Dokumentasi API lengkap untuk Sistem Informasi Geografis Signal (SIGS) Kabupaten Muara Enim. Mencakup manajemen master data, verifikasi tower, riwayat sinyal seluler, spasial PostGIS, demografi, dan ekspor data.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Local Development Server"
+    }
+  ],
+  "tags": [
+    { "name": "Auth", "description": "Autentikasi & manajemen profil pengguna" },
+    { "name": "Admin", "description": "Manajemen akun Pemdes (Super Admin saja)" },
+    { "name": "Master Data", "description": "Manajemen data referensi (Kecamatan, Desa, Operator, Teknologi, Media)" },
+    { "name": "Sinyal", "description": "Pencatatan & riwayat kekuatan sinyal seluler" },
+    { "name": "Tower", "description": "Pengajuan & verifikasi tower telekomunikasi" },
+    { "name": "Upload & Foto", "description": "Unggah foto lampiran & penghapusan foto" },
+    { "name": "Demografi", "description": "Pencatatan data kependudukan desa/kelurahan" },
+    { "name": "Spatial", "description": "Kalkulasi geografis menggunakan PostGIS" },
+    { "name": "Dashboard", "description": "Statistik ringkasan dashboard" },
+    { "name": "Public API", "description": "Endpoints publik tanpa autentikasi (untuk peta publik)" },
+    { "name": "Export", "description": "Ekspor data dalam format CSV" },
+    { "name": "Rekomendasi", "description": "Fitur analisis centroid & tower terdekat" }
+  ],
+  "paths": {
+    "/api/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Login Pengguna",
+        "description": "Autentikasi menggunakan NextAuth credentials provider.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["username", "password"],
+                "properties": {
+                  "username": { "type": "string", "example": "admin" },
+                  "password": { "type": "string", "example": "admin123" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login berhasil, session cookies diset otomatis."
+          },
+          "401": {
+            "description": "Kredensial salah atau akun dinonaktifkan."
+          }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Info Akun Aktif",
+        "description": "Mengambil data profil pengguna yang sedang login.",
+        "responses": {
+          "200": {
+            "description": "Berhasil mengambil data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                },
+                "example": {
+                  "success": true,
+                  "message": "Data user berhasil diambil",
+                  "data": {
+                    "id": 2,
+                    "username": "pemdes_lubai",
+                    "nama": "Pemdes Lubai",
+                    "role": "PEMDES",
+                    "isActive": true,
+                    "desaKelurahanId": 5,
+                    "desaKelurahan": {
+                      "id": 5,
+                      "nama": "Desa Lubai",
+                      "kecamatan": { "id": 2, "nama": "Lubai" }
+                    },
+                    "createdAt": "2026-06-27T10:00:00.000Z"
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/auth/profile": {
+      "put": {
+        "tags": ["Auth"],
+        "summary": "Update Profil / Ganti Password",
+        "description": "Mengubah nama atau mengganti sandi pengguna aktif.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "nama": { "type": "string", "example": "Pemdes Lubai Baru" },
+                  "password_lama": { "type": "string" },
+                  "password_baru": { "type": "string", "minLength": 6 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Profil berhasil diperbarui",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ApiResponse" }
+              }
+            }
+          },
+          "400": { "description": "Password lama tidak sesuai atau format data salah." }
+        }
+      }
+    },
+    "/api/admin/users": {
+      "get": {
+        "tags": ["Admin"],
+        "summary": "Daftar Akun Pemdes",
+        "description": "Mengambil semua daftar akun desa/kelurahan terdaftar. Hanya untuk Super Admin.",
+        "parameters": [
+          { "$ref": "#/components/parameters/Search" },
+          { "$ref": "#/components/parameters/Page" },
+          { "$ref": "#/components/parameters/PageSize" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Berhasil mengambil data",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ApiResponse" }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      },
+      "post": {
+        "tags": ["Admin"],
+        "summary": "Buat Akun Pemdes Baru",
+        "description": "Membuat akun baru untuk perwakilan Desa/Kelurahan. Hanya untuk Super Admin.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["username", "nama", "password", "desaKelurahanId"],
+                "properties": {
+                  "username": { "type": "string", "example": "pemdes_lubai" },
+                  "nama": { "type": "string", "example": "Pemdes Lubai" },
+                  "password": { "type": "string", "example": "securepass123" },
+                  "desaKelurahanId": { "type": "integer", "example": 5 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Akun berhasil dibuat" },
+          "400": { "description": "Username sudah terpakai." }
+        }
+      }
+    },
+    "/api/admin/users/{id}": {
+      "put": {
+        "tags": ["Admin"],
+        "summary": "Edit Akun Pemdes",
+        "parameters": [{ "$ref": "#/components/parameters/IdPath" }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "nama": { "type": "string" },
+                  "isActive": { "type": "boolean" },
+                  "desaKelurahanId": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Akun berhasil diperbarui" }
+        }
+      },
+      "delete": {
+        "tags": ["Admin"],
+        "summary": "Nonaktifkan Akun Pemdes (Soft Delete)",
+        "description": "Mengubah status `is_active` akun Pemdes menjadi false. Tidak dihapus permanen.",
+        "parameters": [{ "$ref": "#/components/parameters/IdPath" }],
+        "responses": {
+          "200": { "description": "Akun berhasil dinonaktifkan" }
+        }
+      }
+    },
+    "/api/master/kecamatan": {
+      "get": {
+        "tags": ["Master Data"],
+        "summary": "Daftar Kecamatan",
+        "parameters": [
+          { "$ref": "#/components/parameters/Search" },
+          { "$ref": "#/components/parameters/Page" },
+          { "$ref": "#/components/parameters/PageSize" }
+        ],
+        "responses": {
+          "200": { "description": "Sukses" }
+        }
+      },
+      "post": {
+        "tags": ["Master Data"],
+        "summary": "Tambah Kecamatan",
+        "description": "Hanya untuk Super Admin.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["nama", "kode"],
+                "properties": {
+                  "nama": { "type": "string", "example": "Rambang Niru" },
+                  "kode": { "type": "string", "example": "16.03.05" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Kecamatan berhasil ditambahkan" }
+        }
+      }
+    },
+    "/api/master/kecamatan/{id}": {
+      "put": {
+        "tags": ["Master Data"],
+        "summary": "Edit Kecamatan",
+        "parameters": [{ "$ref": "#/components/parameters/IdPath" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["nama", "kode"],
+                "properties": {
+                  "nama": { "type": "string" },
+                  "kode": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Sukses" }
+        }
+      },
+      "delete": {
+        "tags": ["Master Data"],
+        "summary": "Hapus Kecamatan",
+        "description": "Hanya bisa dihapus jika tidak ada desa yang terikat.",
+        "parameters": [{ "$ref": "#/components/parameters/IdPath" }],
+        "responses": {
+          "200": { "description": "Kecamatan berhasil dihapus" },
+          "400": { "description": "Kecamatan memiliki data anak." }
+        }
+      }
+    },
+    "/api/master/desa": {
+      "get": {
+        "tags": ["Master Data"],
+        "summary": "Daftar Desa/Kelurahan",
+        "parameters": [
+          { "name": "kecamatan_id", "in": "query", "description": "Filter per ID Kecamatan", "schema": { "type": "integer" } },
+          { "$ref": "#/components/parameters/Search" },
+          { "$ref": "#/components/parameters/Page" },
+          { "$ref": "#/components/parameters/PageSize" }
+        ],
+        "responses": {
+          "200": { "description": "Sukses" }
+        }
+      },
+      "post": {
+        "tags": ["Master Data"],
+        "summary": "Tambah Desa/Kelurahan",
+        "description": "Hanya untuk Super Admin.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["kecamatanId", "nama", "tipe"],
+                "properties": {
+                  "kecamatanId": { "type": "integer", "example": 1 },
+                  "nama": { "type": "string", "example": "Tanjung Enim" },
+                  "tipe": { "type": "string", "enum": ["DESA", "KELURAHAN"], "example": "KELURAHAN" },
+                  "kodeDesa": { "type": "string", "example": "16.03.05.1001" },
+                  "latitude": { "type": "number", "example": -3.766 },
+                  "longitude": { "type": "number", "example": 103.8 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Desa/kelurahan berhasil ditambahkan" }
+        }
+      }
+    },
+    "/api/master/desa/{id}": {
+      "put": {
+        "tags": ["Master Data"],
+        "summary": "Edit Desa/Kelurahan",
+        "parameters": [{ "$ref": "#/components/parameters/IdPath" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "kecamatanId": { "type": "integer" },
+                  "nama": { "type": "string" },
+                  "tipe": { "type": "string", "enum": ["DESA", "KELURAHAN"] },
+                  "kodeDesa": { "type": "string" },
+                  "latitude": { "type": "number" },
+                  "longitude": { "type": "number" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Sukses" }
+        }
+      },
+      "delete": {
+        "tags": ["Master Data"],
+        "summary": "Hapus Desa/Kelurahan",
+        "parameters": [{ "$ref": "#/components/parameters/IdPath" }],
+        "responses": {
+          "200": { "description": "Desa berhasil dihapus" }
+        }
+      }
+    },
+    "/api/master/operator": {
+      "get": {
+        "tags": ["Master Data"],
+        "summary": "Daftar Operator Seluler",
+        "parameters": [
+          { "$ref": "#/components/parameters/Search" }
+        ],
+        "responses": {
+          "200": { "description": "Sukses" }
+        }
+      },
+      "post": {
+        "tags": ["Master Data"],
+        "summary": "Tambah Operator",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["nama"],
+                "properties": {
+                  "nama": { "type": "string", "example": "Telkomsel" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Sukses" }
+        }
+      }
+    },
+    "/api/master/operator/{id}": {
+      "put": {
+        "tags": ["Master Data"],
+        "summary": "Edit Operator",
+        "parameters": [{ "$ref": "#/components/parameters/IdPath" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["nama"],
+                "properties": {
+                  "nama": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Sukses" }
+        }
+      },
+      "delete": {
+        "tags": ["Master Data"],
+        "summary": "Hapus Operator",
+        "parameters": [{ "$ref": "#/components/parameters/IdPath" }],
+        "responses": {
+          "200": { "description": "Operator berhasil dihapus" }
+        }
+      }
+    },
+    "/api/master/teknologi": {
+      "get": {
+        "tags": ["Master Data"],
+        "summary": "Daftar Teknologi Sinyal",
+        "responses": { "200": { "description": "Sukses" } }
+      },
+      "post": {
+        "tags": ["Master Data"],
+        "summary": "Tambah Teknologi Sinyal",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["nama"],
+                "properties": { "nama": { "type": "string", "example": "4G LTE" } }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Sukses" } }
+      }
+    },
+    "/api/master/teknologi/{id}": {
+      "put": {
+        "tags": ["Master Data"],
+        "summary": "Edit Teknologi",
+        "parameters": [{ "$ref": "#/components/parameters/IdPath" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["nama"],
+                "properties": { "nama": { "type": "string" } }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Sukses" } }
+      },
+      "delete": {
+        "tags": ["Master Data"],
+        "summary": "Hapus Teknologi Sinyal",
+        "parameters": [{ "$ref": "#/components/parameters/IdPath" }],
+        "responses": { "200": { "description": "Sukses" } }
+      }
+    },
+    "/api/master/media": {
+      "get": {
+        "tags": ["Master Data"],
+        "summary": "Daftar Media Transmisi",
+        "responses": { "200": { "description": "Sukses" } }
+      },
+      "post": {
+        "tags": ["Master Data"],
+        "summary": "Tambah Media Transmisi",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["nama"],
+                "properties": { "nama": { "type": "string", "example": "Fiber Optic" } }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Sukses" } }
+      }
+    },
+    "/api/master/media/{id}": {
+      "put": {
+        "tags": ["Master Data"],
+        "summary": "Edit Media Transmisi",
+        "parameters": [{ "$ref": "#/components/parameters/IdPath" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["nama"],
+                "properties": { "nama": { "type": "string" } }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Sukses" } }
+      },
+      "delete": {
+        "tags": ["Master Data"],
+        "summary": "Hapus Media Transmisi",
+        "parameters": [{ "$ref": "#/components/parameters/IdPath" }],
+        "responses": { "200": { "description": "Sukses" } }
+      }
+    },
+    "/api/sinyal": {
+      "get": {
+        "tags": ["Sinyal"],
+        "summary": "Daftar Riwayat Sinyal (Peta & Tabel)",
+        "description": "Mengambil riwayat kekuatan sinyal. Untuk akun PEMDES, data dibatasi secara otomatis hanya untuk desanya sendiri (Tenant Isolation). Parameter Bounding Box (BBOX) didukung.",
+        "parameters": [
+          { "name": "desa_id", "in": "query", "description": "Filter desa tertentu", "schema": { "type": "integer" } },
+          { "name": "kecamatan_id", "in": "query", "description": "Filter kecamatan tertentu", "schema": { "type": "integer" } },
+          { "name": "operator_id", "in": "query", "description": "Filter operator seluler", "schema": { "type": "integer" } },
+          { "name": "rsrp_min", "in": "query", "description": "Minimum RSRP (dBm)", "schema": { "type": "number" } },
+          { "name": "rsrp_max", "in": "query", "description": "Maximum RSRP (dBm)", "schema": { "type": "number" } },
+          { "name": "minLat", "in": "query", "description": "BBOX min Latitude", "schema": { "type": "number" } },
+          { "name": "maxLat", "in": "query", "description": "BBOX max Latitude", "schema": { "type": "number" } },
+          { "name": "minLng", "in": "query", "description": "BBOX min Longitude", "schema": { "type": "number" } },
+          { "name": "maxLng", "in": "query", "description": "BBOX max Longitude", "schema": { "type": "number" } },
+          { "name": "all_time", "in": "query", "description": "Lewati filter default 6 bulan terakhir", "schema": { "type": "boolean" } },
+          { "$ref": "#/components/parameters/Page" },
+          { "$ref": "#/components/parameters/PageSize" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sukses",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ApiResponse" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Sinyal"],
+        "summary": "Input Data Kekuatan Sinyal Baru",
+        "description": "Mencatat titik kekuatan sinyal baru. Pemdes hanya bisa menginput untuk desanya sendiri.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["desaKelurahanId", "operatorId", "teknologiId", "latitude", "longitude", "rsrp"],
+                "properties": {
+                  "desaKelurahanId": { "type": "integer", "example": 5 },
+                  "operatorId": { "type": "integer", "example": 1 },
+                  "teknologiId": { "type": "integer", "example": 3 },
+                  "latitude": { "type": "number", "example": -3.754 },
+                  "longitude": { "type": "number", "example": 103.752 },
+                  "rsrp": { "type": "number", "description": "RSRP (dBm)", "example": -90 },
+                  "rssi": { "type": "number", "example": -72 },
+                  "rsrq": { "type": "number", "example": -12 },
+                  "snr": { "type": "number", "example": 15 },
+                  "tanggalPengukuran": { "type": "string", "format": "date-time", "example": "2024-05-20T10:30:00Z" },
+                  "catatan": { "type": "string", "example": "Pengukuran dekat gedung serbaguna" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Data sinyal berhasil disimpan" }
+        }
+      }
+    },
+    "/api/sinyal/{id}": {
+      "get": {
+        "tags": ["Sinyal"],
+        "summary": "Detail Data Sinyal",
+        "parameters": [{ "$ref": "#/components/parameters/IdPath" }],
+        "responses": { "200": { "description": "Sukses" } }
+      },
+      "put": {
+        "tags": ["Sinyal"],
+        "summary": "Ubah Data Sinyal",
+        "description": "Pemdes hanya bisa mengubah data yang diinput oleh akunnya sendiri.",
+        "parameters": [{ "$ref": "#/components/parameters/IdPath" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "operatorId": { "type": "integer" },
+                  "teknologiId": { "type": "integer" },
+                  "latitude": { "type": "number" },
+                  "longitude": { "type": "number" },
+                  "rsrp": { "type": "number" },
+                  "catatan": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Sinyal berhasil diperbarui" } }
+      },
+      "delete": {
+        "tags": ["Sinyal"],
+        "summary": "Hapus Data Sinyal",
+        "parameters": [{ "$ref": "#/components/parameters/IdPath" }],
+        "responses": { "200": { "description": "Sukses" } }
+      }
+    },
+    "/api/sinyal/terbaru": {
+      "get": {
+        "tags": ["Sinyal"],
+        "summary": "Titik Sinyal Terbaru per Lokasi",
+        "description": "Mengambil titik-titik sinyal terupdate (distinct lokasi) dengan batasan BBOX dan max 6 bulan terakhir.",
+        "parameters": [
+          { "name": "kecamatan_id", "in": "query", "schema": { "type": "integer" } },
+          { "name": "desa_id", "in": "query", "schema": { "type": "integer" } },
+          { "name": "operator_id", "in": "query", "schema": { "type": "integer" } },
+          { "name": "minLat", "in": "query", "schema": { "type": "number" } },
+          { "name": "maxLat", "in": "query", "schema": { "type": "number" } },
+          { "name": "minLng", "in": "query", "schema": { "type": "number" } },
+          { "name": "maxLng", "in": "query", "schema": { "type": "number" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 50 } }
+        ],
+        "responses": { "200": { "description": "Sukses" } }
+      }
+    },
+    "/api/tower": {
+      "get": {
+        "tags": ["Tower"],
+        "summary": "Daftar Tower Telekomunikasi",
+        "description": "Mendapatkan semua data tower. Data tower bersifat publik/bersama (TIDAK di-isolasi per desa untuk visibilitas lintas batas).",
+        "parameters": [
+          { "name": "status_verifikasi", "in": "query", "schema": { "type": "string", "enum": ["DRAFT", "PENDING", "APPROVED", "REJECTED"] } },
+          { "name": "desa_id", "in": "query", "schema": { "type": "integer" } },
+          { "name": "kecamatan_id", "in": "query", "schema": { "type": "integer" } },
+          { "$ref": "#/components/parameters/Search" },
+          { "$ref": "#/components/parameters/Page" },
+          { "$ref": "#/components/parameters/PageSize" }
+        ],
+        "responses": { "200": { "description": "Sukses" } }
+      },
+      "post": {
+        "tags": ["Tower"],
+        "summary": "Pengajuan Tower Baru",
+        "description": "Mengajukan data pembangunan tower baru. Jika diinput oleh Pemdes, status otomatis menjadi `PENDING` (menunggu verifikasi). Jika Super Admin, status otomatis `APPROVED`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["kecamatanId", "namaTower", "latitude", "longitude", "operatorIds", "teknologiIds", "mediaIds"],
+                "properties": {
+                  "desaKelurahanId": { "type": "integer", "example": 5 },
+                  "kecamatanId": { "type": "integer", "example": 1 },
+                  "namaTower": { "type": "string", "example": "Tower Telkomsel Lubai" },
+                  "deskripsiLokasi": { "type": "string", "example": "Samping lapangan bola kaki desa" },
+                  "latitude": { "type": "number", "example": -3.891 },
+                  "longitude": { "type": "number", "example": 103.901 },
+                  "tinggiKategori": { "type": "string", "example": "42 Meter" },
+                  "operatorIds": { "type": "array", "items": { "type": "integer" }, "example": [1, 2] },
+                  "teknologiIds": { "type": "array", "items": { "type": "integer" }, "example": [3, 4] },
+                  "mediaIds": { "type": "array", "items": { "type": "integer" }, "example": [1] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Tower berhasil diajukan" }
+        }
+      }
+    },
+    "/api/tower/{id}": {
+      "get": {
+        "tags": ["Tower"],
+        "summary": "Detail Data Tower",
+        "parameters": [{ "$ref": "#/components/parameters/IdPath" }],
+        "responses": { "200": { "description": "Sukses" } }
+      },
+      "put": {
+        "tags": ["Tower"],
+        "summary": "Ubah Data Tower",
+        "description": "Pemdes hanya dapat mengedit tower yang mereka ajukan sendiri. Jika tower berstatus `REJECTED` diedit oleh Pemdes, statusnya akan dikembalikan ke `PENDING` untuk verifikasi ulang.",
+        "parameters": [{ "$ref": "#/components/parameters/IdPath" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "namaTower": { "type": "string" },
+                  "deskripsiLokasi": { "type": "string" },
+                  "latitude": { "type": "number" },
+                  "longitude": { "type": "number" },
+                  "tinggiKategori": { "type": "string" },
+                  "operatorIds": { "type": "array", "items": { "type": "integer" } },
+                  "teknologiIds": { "type": "array", "items": { "type": "integer" } },
+                  "mediaIds": { "type": "array", "items": { "type": "integer" } }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Tower berhasil diperbarui" } }
+      },
+      "delete": {
+        "tags": ["Tower"],
+        "summary": "Hapus Pengajuan/Data Tower",
+        "parameters": [{ "$ref": "#/components/parameters/IdPath" }],
+        "responses": { "200": { "description": "Tower berhasil dihapus" } }
+      }
+    },
+    "/api/tower/{id}/verify": {
+      "put": {
+        "tags": ["Tower"],
+        "summary": "Verifikasi Tower (Approve/Reject)",
+        "description": "Memproses verifikasi pengajuan tower. Hanya untuk Super Admin.",
+        "parameters": [{ "$ref": "#/components/parameters/IdPath" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["statusVerifikasi"],
+                "properties": {
+                  "statusVerifikasi": { "type": "string", "enum": ["APPROVED", "REJECTED"], "example": "REJECTED" },
+                  "alasanPenolakan": { "type": "string", "description": "Wajib diisi jika status REJECTED", "example": "Koordinat yang diinput melenceng jauh dari batas desa." }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Tower berhasil diverifikasi" }
+        }
+      }
+    },
+    "/api/upload/sinyal": {
+      "post": {
+        "tags": ["Upload & Foto"],
+        "summary": "Unggah Foto Lampiran Sinyal",
+        "description": "Mengunggah berkas foto pendukung. Berkas berukuran lebih dari 3MB akan dikompres secara otomatis menjadi kualitas 80% JPEG.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["file", "sinyal_id"],
+                "properties": {
+                  "file": { "type": "string", "format": "binary" },
+                  "sinyal_id": { "type": "string", "description": "ID data sinyal" },
+                  "keterangan": { "type": "string", "description": "Keterangan foto" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Foto berhasil diupload" }
+        }
+      }
+    },
+    "/api/upload/tower": {
+      "post": {
+        "tags": ["Upload & Foto"],
+        "summary": "Unggah Foto Lampiran Tower",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["file", "tower_id"],
+                "properties": {
+                  "file": { "type": "string", "format": "binary" },
+                  "tower_id": { "type": "string" },
+                  "keterangan": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Sukses" } }
+      }
+    },
+    "/api/foto/{id}": {
+      "delete": {
+        "tags": ["Upload & Foto"],
+        "summary": "Hapus Foto Lampiran",
+        "description": "Menghapus data foto dari database sekaligus menghapus file aslinya dari penyimpanan server.",
+        "parameters": [{ "$ref": "#/components/parameters/IdPath" }],
+        "responses": {
+          "200": { "description": "Foto berhasil dihapus" }
+        }
+      }
+    },
+    "/api/demografi/{desaId}": {
+      "get": {
+        "tags": ["Demografi"],
+        "summary": "Ambil Data Demografi Desa",
+        "parameters": [{ "name": "desaId", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Sukses" } }
+      },
+      "put": {
+        "tags": ["Demografi"],
+        "summary": "Update/Upsert Demografi Desa",
+        "description": "Mengisi atau memperbarui data demografi desa. Pemdes hanya bisa mengupdate untuk desanya sendiri.",
+        "parameters": [{ "name": "desaId", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "jumlahPenduduk": { "type": "integer", "example": 2450 },
+                  "usiaProduktif": { "type": "integer", "example": 1800 },
+                  "kepadatan": { "type": "number", "example": 12.5 },
+                  "mataPencaharianUtama": { "type": "string", "example": "Petani Karet" },
+                  "rataRataPenghasilan": { "type": "integer", "example": 3200000 },
+                  "saranaKesehatan": { "type": "boolean", "example": true },
+                  "saranaPendidikan": { "type": "boolean", "example": true },
+                  "pasar": { "type": "boolean", "example": false },
+                  "kegiatanEkonomi": { "type": "string" },
+                  "catatan": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Data demografi berhasil diperbarui" } }
+      }
+    },
+    "/api/spatial/jarak": {
+      "get": {
+        "tags": ["Spatial"],
+        "summary": "Hitung Jarak Antar 2 Titik Koordinat",
+        "description": "Menghitung jarak dalam meter & km menggunakan fungsi PostGIS `ST_DistanceSphere`.",
+        "parameters": [
+          { "name": "lat1", "in": "query", "required": true, "schema": { "type": "number" } },
+          { "name": "lon1", "in": "query", "required": true, "schema": { "type": "number" } },
+          { "name": "lat2", "in": "query", "required": true, "schema": { "type": "number" } },
+          { "name": "lon2", "in": "query", "required": true, "schema": { "type": "number" } }
+        ],
+        "responses": { "200": { "description": "Sukses" } }
+      }
+    },
+    "/api/spatial/tower-terdekat": {
+      "get": {
+        "tags": ["Spatial"],
+        "summary": "Cari Tower Terdekat",
+        "description": "Mendapatkan daftar tower terdekat dalam jangkauan radius km menggunakan fungsi spasial PostGIS.",
+        "parameters": [
+          { "name": "latitude", "in": "query", "required": true, "schema": { "type": "number" } },
+          { "name": "longitude", "in": "query", "required": true, "schema": { "type": "number" } },
+          { "name": "radius_km", "in": "query", "schema": { "type": "number", "default": 10 } }
+        ],
+        "responses": { "200": { "description": "Sukses" } }
+      }
+    },
+    "/api/dashboard/sinyal-statistik": {
+      "get": {
+        "tags": ["Dashboard"],
+        "summary": "Statistik Sinyal & Tower",
+        "description": "Mengambil total titik pengukuran sinyal, klasifikasi kualitas (Baik, Sedang, Buruk), dan jumlah tower berdasarkan status verifikasinya.",
+        "responses": { "200": { "description": "Sukses" } }
+      }
+    },
+    "/api/dashboard/recent-activity": {
+      "get": {
+        "tags": ["Dashboard"],
+        "summary": "Log Aktivitas Terbaru",
+        "responses": { "200": { "description": "Sukses" } }
+      }
+    },
+    "/api/public/peta-sinyal": {
+      "get": {
+        "tags": ["Public API"],
+        "summary": "Data Sinyal Publik",
+        "description": "Digunakan untuk merender peta sebaran sinyal di portal publik tanpa login. Data terfilter otomatis 6 bulan terakhir.",
+        "parameters": [
+          { "name": "minLat", "in": "query", "required": true, "schema": { "type": "number" } },
+          { "name": "maxLat", "in": "query", "required": true, "schema": { "type": "number" } },
+          { "name": "minLng", "in": "query", "required": true, "schema": { "type": "number" } },
+          { "name": "maxLng", "in": "query", "required": true, "schema": { "type": "number" } },
+          { "name": "operator_id", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Sukses" } }
+      }
+    },
+    "/api/public/peta-tower": {
+      "get": {
+        "tags": ["Public API"],
+        "summary": "Data Tower Publik",
+        "description": "Hanya mengembalikan data tower yang berstatus `APPROVED`.",
+        "parameters": [
+          { "name": "minLat", "in": "query", "schema": { "type": "number" } },
+          { "name": "maxLat", "in": "query", "schema": { "type": "number" } },
+          { "name": "minLng", "in": "query", "schema": { "type": "number" } },
+          { "name": "maxLng", "in": "query", "schema": { "type": "number" } }
+        ],
+        "responses": { "200": { "description": "Sukses" } }
+      }
+    },
+    "/api/export/sinyal": {
+      "get": {
+        "tags": ["Export"],
+        "summary": "Ekspor Data Sinyal (CSV)",
+        "parameters": [{ "name": "operator_id", "in": "query", "schema": { "type": "integer" } }],
+        "responses": {
+          "200": {
+            "description": "File CSV diunduh otomatis",
+            "content": { "text/csv": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/api/export/tower": {
+      "get": {
+        "tags": ["Export"],
+        "summary": "Ekspor Data Tower (CSV)",
+        "parameters": [{ "name": "status_verifikasi", "in": "query", "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Unduhan CSV" } }
+      }
+    },
+    "/api/export/desa": {
+      "get": {
+        "tags": ["Export"],
+        "summary": "Ekspor Data Desa & Demografi (CSV)",
+        "responses": { "200": { "description": "Unduhan CSV" } }
+      }
+    },
+    "/api/rekomendasi/pusat-desa/{desaId}": {
+      "get": {
+        "tags": ["Rekomendasi"],
+        "summary": "Rekomendasi Pusat Desa",
+        "description": "Menghitung koordinat centroid (titik tengah persebaran) berdasarkan riwayat pengukuran sinyal di desa tersebut, dan mencari 3 tower terdekat dari titik centroid tersebut.",
+        "parameters": [{ "name": "desaId", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Sukses" } }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ApiResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "message": { "type": "string" },
+          "data": { "type": "object", "nullable": true },
+          "meta": { "type": "object", "nullable": true }
+        }
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Belum login / Session invalid",
+        "content": {
+          "application/json": {
+            "example": { "success": false, "message": "Anda belum login", "data": null }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Tidak memiliki role yang diijinkan",
+        "content": {
+          "application/json": {
+            "example": { "success": false, "message": "Anda tidak memiliki akses", "data": null }
+          }
+        }
+      }
+    },
+    "parameters": {
+      "IdPath": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "ID Data",
+        "schema": { "type": "integer" }
+      },
+      "Search": {
+        "name": "search",
+        "in": "query",
+        "description": "Filter kata kunci pencarian",
+        "schema": { "type": "string" }
+      },
+      "Page": {
+        "name": "page",
+        "in": "query",
+        "description": "Halaman data saat ini",
+        "schema": { "type": "integer", "default": 1 }
+      },
+      "PageSize": {
+        "name": "page_size",
+        "in": "query",
+        "description": "Jumlah baris data per halaman",
+        "schema": { "type": "integer", "default": 10 }
+      }
+    }
+  }
+}

@@ -1,0 +1,242 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  SUPER_ADMIN
+  PEMDES
+}
+
+enum TipeDesa {
+  DESA
+  KELURAHAN
+}
+
+enum StatusVerifikasi {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id                Int       @id @default(autoincrement())
+  username          String    @unique
+  password          String
+  nama              String
+  role              Role
+  desaKelurahanId   Int?      @map("desa_kelurahan_id")
+  isActive          Boolean   @default(true) @map("is_active")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  desaKelurahan     DesaKelurahan? @relation(fields: [desaKelurahanId], references: [id])
+  riwayatSinyal     RiwayatSinyal[]
+  tower             Tower[]
+  fotoSinyal        FotoSinyal[]
+  fotoTower         FotoTower[]
+
+  @@map("users")
+}
+
+model Kecamatan {
+  id        Int       @id @default(autoincrement())
+  nama      String
+  kode      String    @unique
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  desaKelurahan DesaKelurahan[]
+  tower         Tower[]
+
+  @@map("kecamatan")
+}
+
+model DesaKelurahan {
+  id            Int       @id @default(autoincrement())
+  kecamatanId   Int       @map("kecamatan_id")
+  nama          String
+  tipe          TipeDesa
+  kodeDesa      String?   @unique @map("kode_desa")
+  latitude      Float?
+  longitude     Float?
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  kecamatan     Kecamatan @relation(fields: [kecamatanId], references: [id])
+  users         User[]
+  riwayatSinyal RiwayatSinyal[]
+  tower         Tower[]
+  demografi     DemografiDesa?
+
+  @@map("desa_kelurahan")
+}
+
+model Operator {
+  id    Int    @id @default(autoincrement())
+  nama  String @unique
+
+  riwayatSinyal  RiwayatSinyal[]
+  towerOperator  TowerOperator[]
+
+  @@map("operator")
+}
+
+model Teknologi {
+  id    Int    @id @default(autoincrement())
+  nama  String @unique
+
+  riwayatSinyal   RiwayatSinyal[]
+  towerTeknologi  TowerTeknologi[]
+
+  @@map("teknologi")
+}
+
+model MediaTransmisi {
+  id    Int    @id @default(autoincrement())
+  nama  String @unique
+
+  towerMedia TowerMedia[]
+
+  @@map("media_transmisi")
+}
+
+model RiwayatSinyal {
+  id                Int       @id @default(autoincrement())
+  desaKelurahanId   Int       @map("desa_kelurahan_id")
+  operatorId        Int       @map("operator_id")
+  teknologiId       Int       @map("teknologi_id")
+  userId            Int       @map("user_id")
+  latitude          Float
+  longitude         Float
+  geom              Unsupported("geometry(Point, 4326)")?
+  rsrp              Float?
+  rssi              Float?
+  rsrq              Float?
+  snr               Float?
+  tanggalPengukuran DateTime  @map("tanggal_pengukuran")
+  catatan           String?
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  desaKelurahan DesaKelurahan @relation(fields: [desaKelurahanId], references: [id])
+  operator      Operator      @relation(fields: [operatorId], references: [id])
+  teknologi     Teknologi     @relation(fields: [teknologiId], references: [id])
+  user          User          @relation(fields: [userId], references: [id])
+  foto          FotoSinyal[]
+
+  @@index([desaKelurahanId])
+  @@index([operatorId])
+  @@index([tanggalPengukuran])
+  @@map("riwayat_sinyal")
+}
+
+model Tower {
+  id                Int               @id @default(autoincrement())
+  desaKelurahanId   Int?              @map("desa_kelurahan_id")
+  kecamatanId       Int               @map("kecamatan_id")
+  userId            Int               @map("user_id")
+  namaTower         String            @map("nama_tower")
+  deskripsiLokasi   String?           @map("deskripsi_lokasi")
+  latitude          Float
+  longitude         Float
+  geom              Unsupported("geometry(Point, 4326)")?
+  tinggiKategori    String?           @map("tinggi_kategori")
+  statusVerifikasi  StatusVerifikasi  @default(DRAFT) @map("status_verifikasi")
+  alasanPenolakan   String?           @map("alasan_penolakan")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+
+  desaKelurahan  DesaKelurahan? @relation(fields: [desaKelurahanId], references: [id])
+  kecamatan      Kecamatan      @relation(fields: [kecamatanId], references: [id])
+  user           User           @relation(fields: [userId], references: [id])
+  foto           FotoTower[]
+  towerOperator  TowerOperator[]
+  towerTeknologi TowerTeknologi[]
+  towerMedia     TowerMedia[]
+
+  @@index([statusVerifikasi])
+  @@index([kecamatanId])
+  @@map("tower")
+}
+
+model TowerOperator {
+  towerId    Int @map("tower_id")
+  operatorId Int @map("operator_id")
+
+  tower    Tower    @relation(fields: [towerId], references: [id], onDelete: Cascade)
+  operator Operator @relation(fields: [operatorId], references: [id], onDelete: Cascade)
+
+  @@id([towerId, operatorId])
+  @@map("tower_operator")
+}
+
+model TowerTeknologi {
+  towerId     Int @map("tower_id")
+  teknologiId Int @map("teknologi_id")
+
+  tower     Tower     @relation(fields: [towerId], references: [id], onDelete: Cascade)
+  teknologi Teknologi @relation(fields: [teknologiId], references: [id], onDelete: Cascade)
+
+  @@id([towerId, teknologiId])
+  @@map("tower_teknologi")
+}
+
+model TowerMedia {
+  towerId          Int @map("tower_id")
+  mediaTransmisiId Int @map("media_transmisi_id")
+
+  tower          Tower          @relation(fields: [towerId], references: [id], onDelete: Cascade)
+  mediaTransmisi MediaTransmisi @relation(fields: [mediaTransmisiId], references: [id], onDelete: Cascade)
+
+  @@id([towerId, mediaTransmisiId])
+  @@map("tower_media")
+}
+
+model FotoSinyal {
+  id        Int      @id @default(autoincrement())
+  sinyalId  Int      @map("sinyal_id")
+  userId    Int      @map("user_id")
+  url       String
+  keterangan String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  sinyal RiwayatSinyal @relation(fields: [sinyalId], references: [id], onDelete: Cascade)
+  user   User          @relation(fields: [userId], references: [id])
+
+  @@map("foto_sinyal")
+}
+
+model FotoTower {
+  id        Int      @id @default(autoincrement())
+  towerId   Int      @map("tower_id")
+  userId    Int      @map("user_id")
+  url       String
+  keterangan String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tower Tower @relation(fields: [towerId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@map("foto_tower")
+}
+
+model DemografiDesa {
+  desaKelurahanId       Int      @id @map("desa_kelurahan_id")
+  jumlahPenduduk        Int?     @map("jumlah_penduduk")
+  usiaProduktif         Int?     @map("usia_produktif")
+  kepadatan             Float?
+  mataPencaharianUtama  String?  @map("mata_pencaharian_utama")
+  rataRataPenghasilan   Int?     @map("rata_rata_penghasilan")
+  saranaKesehatan       Boolean  @default(false) @map("sarana_kesehatan")
+  saranaPendidikan      Boolean  @default(false) @map("sarana_pendidikan")
+  pasar                 Boolean  @default(false)
+  kegiatanEkonomi       String?  @map("kegiatan_ekonomi")
+  catatan               String?
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  desaKelurahan DesaKelurahan @relation(fields: [desaKelurahanId], references: [id], onDelete: Cascade)
+
+  @@map("demografi_desa")
+}
