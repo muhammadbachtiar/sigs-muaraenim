@@ -8,9 +8,23 @@ export async function GET(request: Request) {
     if (error) return error
 
     const params = parseSearchParams(request)
+    const isSelect = params.get('is_select') === 'true'
+    if (isSelect) {
+      const data = await prisma.kecamatan.findMany({
+        orderBy: { nama: 'asc' },
+        select: { id: true, nama: true, kode: true }
+      })
+      return successResponse(data, 'Data kecamatan untuk select berhasil diambil')
+    }
+
     const { page, pageSize, skip, take, search } = parsePagination(params)
 
-    const where = search ? { nama: { contains: search, mode: 'insensitive' as const } } : {}
+    const where = search ? {
+      OR: [
+        { nama: { contains: search, mode: 'insensitive' as const } },
+        { kode: { contains: search, mode: 'insensitive' as const } },
+      ]
+    } : {}
 
     const [data, total] = await Promise.all([
       prisma.kecamatan.findMany({ where, skip, take, orderBy: { nama: 'asc' } }),

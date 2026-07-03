@@ -7,7 +7,7 @@ const createUserSchema = z.object({
   username: z.string().min(3, 'Username minimal 3 karakter'),
   nama: z.string().min(1, 'Nama wajib diisi'),
   password: z.string().min(6, 'Password minimal 6 karakter'),
-  desaKelurahanId: z.number().int().positive('Desa/kelurahan wajib dipilih'),
+  desaKelurahanId: z.string().uuid('Desa/kelurahan wajib dipilih'),
 })
 
 export async function GET(request: Request) {
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
       ]
     }
 
-    const [data, total] = await Promise.all([
+    const [data, total, totalActive, totalInactive] = await Promise.all([
       prisma.user.findMany({
         where,
         skip,
@@ -34,13 +34,19 @@ export async function GET(request: Request) {
         orderBy: { createdAt: 'desc' },
         select: {
           id: true, username: true, nama: true, role: true, isActive: true, createdAt: true,
-          desaKelurahan: { select: { id: true, nama: true, kecamatan: { select: { nama: true } } } },
+          desaKelurahan: { select: { id: true, nama: true, kecamatan: { select: { id: true, nama: true } } } },
         },
       }),
       prisma.user.count({ where }),
+      prisma.user.count({ where: { role: 'PEMDES', isActive: true } }),
+      prisma.user.count({ where: { role: 'PEMDES', isActive: false } }),
     ])
 
-    return successResponse(data, 'Data akun Pemdes berhasil diambil', paginationMeta(total, page, pageSize))
+    return successResponse(data, 'Data akun Pemdes berhasil diambil', {
+      ...paginationMeta(total, page, pageSize),
+      totalActive,
+      totalInactive,
+    })
   } catch {
     return serverErrorResponse()
   }

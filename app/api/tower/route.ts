@@ -18,8 +18,8 @@ export async function GET(request: Request) {
     const kecamatanId = params.get('kecamatan_id')
 
     if (statusVerifikasi) where.statusVerifikasi = statusVerifikasi
-    if (desaId) where.desaKelurahanId = parseInt(desaId, 10)
-    if (kecamatanId) where.kecamatanId = parseInt(kecamatanId, 10)
+    if (desaId) where.desaKelurahanId = desaId
+    if (kecamatanId) where.kecamatanId = kecamatanId
     if (search) where.namaTower = { contains: search, mode: 'insensitive' }
 
     const [data, total] = await Promise.all([

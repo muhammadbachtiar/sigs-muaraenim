@@ -12,7 +12,7 @@ export async function GET(request: Request) {
     const operatorId = params.get('operator_id')
 
     const where: any = { ...desaFilter }
-    if (operatorId) where.operatorId = parseInt(operatorId, 10)
+    if (operatorId) where.operatorId = operatorId
 
     const data = await prisma.riwayatSinyal.findMany({
       where,

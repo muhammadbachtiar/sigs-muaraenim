@@ -24,7 +24,7 @@ export const authOptions: NextAuthOptions = {
         if (!isValid) return null
 
         return {
-          id: String(user.id),
+          id: user.id,
           name: user.nama,
           email: user.username,
           role: user.role,
@@ -38,7 +38,7 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.id = Number(user.id)
+        token.id = user.id
         token.role = (user as any).role
         token.desaKelurahanId = (user as any).desaKelurahanId
         token.nama = user.name

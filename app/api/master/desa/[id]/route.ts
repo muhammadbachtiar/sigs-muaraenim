@@ -23,12 +23,42 @@ export async function PUT(request: Request, { params }: RouteContext) {
     const duplicate = await prisma.desaKelurahan.findFirst({ where: { nama, NOT: { id } } })
     if (duplicate) return errorResponse('Desa/kelurahan dengan nama ini sudah ada')
 
-    const updateData: any = { nama }
-    if (body.tipe) updateData.tipe = body.tipe
-    if (body.kecamatanId) updateData.kecamatanId = body.kecamatanId
-    if (body.kodeDesa !== undefined) updateData.kodeDesa = body.kodeDesa
-    if (body.latitude != null) updateData.latitude = body.latitude
-    if (body.longitude != null) updateData.longitude = body.longitude
+    const tipe = body.tipe
+    if (!tipe || (tipe !== 'DESA' && tipe !== 'KELURAHAN')) {
+      return errorResponse('Tipe wajib dipilih (DESA atau KELURAHAN)')
+    }
+
+    const kecamatanId = body.kecamatanId
+    if (!kecamatanId) return errorResponse('Kecamatan wajib dipilih')
+
+    const kecamatan = await prisma.kecamatan.findUnique({ where: { id: kecamatanId } })
+    if (!kecamatan) return errorResponse('Kecamatan tidak ditemukan')
+
+    const kodeDesa = body.kodeDesa?.trim() || null
+    if (kodeDesa) {
+      const duplicateKode = await prisma.desaKelurahan.findFirst({
+        where: { kodeDesa, NOT: { id } }
+      })
+      if (duplicateKode) return errorResponse('Desa/kelurahan dengan kode ini sudah ada')
+    }
+
+    const lat = body.latitude != null ? parseFloat(body.latitude) : null
+    const lng = body.longitude != null ? parseFloat(body.longitude) : null
+    if (lat !== null && (isNaN(lat) || lat < -90 || lat > 90)) {
+      return errorResponse('Latitude harus berupa angka antara -90 dan 90')
+    }
+    if (lng !== null && (isNaN(lng) || lng < -180 || lng > 180)) {
+      return errorResponse('Longitude harus berupa angka antara -180 dan 180')
+    }
+
+    const updateData = {
+      nama,
+      tipe,
+      kecamatanId,
+      kodeDesa,
+      latitude: lat,
+      longitude: lng,
+    }
 
     const data = await prisma.desaKelurahan.update({ where: { id }, data: updateData })
     return successResponse(data, 'Desa/kelurahan berhasil diperbarui')

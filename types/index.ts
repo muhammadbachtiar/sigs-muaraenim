@@ -20,9 +20,9 @@ export interface BBoxParams {
 }
 
 export interface SessionUser {
-  id: number
+  id: string
   username: string
   nama: string
   role: 'SUPER_ADMIN' | 'PEMDES'
-  desaKelurahanId: number | null
+  desaKelurahanId: string | null
 }

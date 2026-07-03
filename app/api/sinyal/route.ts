@@ -25,9 +25,9 @@ export async function GET(request: Request) {
     const rsrpMin = params.get('rsrp_min')
     const rsrpMax = params.get('rsrp_max')
 
-    if (desaId) where.desaKelurahanId = parseInt(desaId, 10)
-    if (kecamatanId) where.desaKelurahan = { kecamatanId: parseInt(kecamatanId, 10) }
-    if (operatorId) where.operatorId = parseInt(operatorId, 10)
+    if (desaId) where.desaKelurahanId = desaId
+    if (kecamatanId) where.desaKelurahan = { kecamatanId }
+    if (operatorId) where.operatorId = operatorId
     if (rsrpMin || rsrpMax) {
       where.rsrp = {}
       if (rsrpMin) where.rsrp.gte = parseFloat(rsrpMin)

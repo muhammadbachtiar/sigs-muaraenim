@@ -23,8 +23,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="id" className={cn(inter.className, "font-sans", geist.variable)}>
-      <body>
+    <html lang="id" suppressHydrationWarning className={cn(inter.className, "font-sans", geist.variable)}>
+      <body suppressHydrationWarning>
         <AuthProvider>{children}</AuthProvider>
         <Toaster />
       </body>

@@ -34,7 +34,7 @@ export async function createOperator(nama: string): Promise<ActionResult> {
   }
 }
 
-export async function updateOperator(id: number, nama: string): Promise<ActionResult> {
+export async function updateOperator(id: string, nama: string): Promise<ActionResult> {
   try {
     if (!nama.trim()) return { success: false, message: 'Nama operator wajib diisi' }
     const existing = await prisma.operator.findFirst({
@@ -49,7 +49,7 @@ export async function updateOperator(id: number, nama: string): Promise<ActionRe
   }
 }
 
-export async function deleteOperator(id: number): Promise<ActionResult> {
+export async function deleteOperator(id: string): Promise<ActionResult> {
   try {
     const hasRelations = await prisma.towerOperator.findFirst({ where: { operatorId: id } })
     const hasSignal = await prisma.riwayatSinyal.findFirst({ where: { operatorId: id } })
@@ -88,7 +88,7 @@ export async function createTeknologi(nama: string): Promise<ActionResult> {
   }
 }
 
-export async function updateTeknologi(id: number, nama: string): Promise<ActionResult> {
+export async function updateTeknologi(id: string, nama: string): Promise<ActionResult> {
   try {
     if (!nama.trim()) return { success: false, message: 'Nama teknologi wajib diisi' }
     const existing = await prisma.teknologi.findFirst({
@@ -103,7 +103,7 @@ export async function updateTeknologi(id: number, nama: string): Promise<ActionR
   }
 }
 
-export async function deleteTeknologi(id: number): Promise<ActionResult> {
+export async function deleteTeknologi(id: string): Promise<ActionResult> {
   try {
     const hasRelations = await prisma.towerTeknologi.findFirst({ where: { teknologiId: id } })
     const hasSignal = await prisma.riwayatSinyal.findFirst({ where: { teknologiId: id } })
@@ -142,7 +142,7 @@ export async function createMediaTransmisi(nama: string): Promise<ActionResult> 
   }
 }
 
-export async function updateMediaTransmisi(id: number, nama: string): Promise<ActionResult> {
+export async function updateMediaTransmisi(id: string, nama: string): Promise<ActionResult> {
   try {
     if (!nama.trim()) return { success: false, message: 'Nama media transmisi wajib diisi' }
     const existing = await prisma.mediaTransmisi.findFirst({
@@ -157,7 +157,7 @@ export async function updateMediaTransmisi(id: number, nama: string): Promise<Ac
   }
 }
 
-export async function deleteMediaTransmisi(id: number): Promise<ActionResult> {
+export async function deleteMediaTransmisi(id: string): Promise<ActionResult> {
   try {
     const hasRelations = await prisma.towerMedia.findFirst({ where: { mediaTransmisiId: id } })
     if (hasRelations) {

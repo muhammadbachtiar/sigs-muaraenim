@@ -14,6 +14,7 @@ import {
   Menu,
   X,
   ChevronRight,
+  UserCog,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
@@ -23,10 +24,11 @@ const navItems = [
   { href: '/tower', label: 'Manajemen Tower', icon: TowerControl },
   { href: '/master', label: 'Master Data', icon: Database },
   { href: '/demografi', label: 'Demografi Desa', icon: Users },
+  { href: '/users', label: 'Manajemen User', icon: UserCog },
   { href: '/peta', label: 'Peta Publik', icon: Map, external: true },
 ]
 
-const adminOnlyItems = ['/master']
+const adminOnlyItems = ['/master', '/users']
 
 export default function DashboardLayout({
   children,
@@ -123,15 +125,26 @@ export default function DashboardLayout({
 
         {/* User info + logout */}
         <div className="dash-sidebar__footer">
-          <div className="dash-sidebar__user-name">{userName}</div>
-          <div className="dash-sidebar__user-role">
-            {userRole === 'SUPER_ADMIN' ? 'Super Admin' : 'Pemdes'}
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="min-w-0">
+              <div className="dash-sidebar__user-name truncate" title={userName}>{userName}</div>
+              <div className="dash-sidebar__user-role">
+                {userRole === 'SUPER_ADMIN' ? 'Super Admin' : 'Pemdes'}
+              </div>
+            </div>
+            <Link
+              href="/settings"
+              className="p-1.5 text-muted-foreground hover:text-primary rounded-lg hover:bg-[var(--color-canvas-soft)] transition-colors shrink-0"
+              title="Pengaturan Akun"
+            >
+              <UserCog size={15} />
+            </Link>
           </div>
           <button
             onClick={() => signOut({ callbackUrl: '/login' })}
             className="dash-sidebar__logout"
           >
-            <LogOut size={14} />
+            <LogOut size={12} />
             Keluar
           </button>
         </div>
@@ -256,21 +269,28 @@ export default function DashboardLayout({
         .dash-sidebar__user-role {
           font-size: 0.6875rem;
           color: var(--color-ink-faint);
-          margin-bottom: 8px;
+          margin-bottom: 0;
         }
         .dash-sidebar__logout {
           display: flex;
           align-items: center;
+          justify-content: center;
           gap: 6px;
-          font-size: 0.8125rem;
+          font-size: 0.75rem;
+          font-weight: 500;
           color: var(--color-ink-muted);
-          background: transparent;
-          border: none;
+          background: var(--color-canvas-soft);
+          border: 1px solid var(--color-hairline);
+          border-radius: 6px;
           cursor: pointer;
-          padding: 0;
+          padding: 6px 12px;
+          width: 100%;
+          transition: all 0.15s ease;
         }
         .dash-sidebar__logout:hover {
-          color: var(--color-danger);
+          background: #fef2f2;
+          color: #dc2626;
+          border-color: #fca5a5;
         }
 
         /* ─── Main ─── */

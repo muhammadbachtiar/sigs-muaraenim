@@ -13,12 +13,14 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Trigger for riwayat_sinyal
+DROP TRIGGER IF EXISTS trg_riwayat_sinyal_geom ON riwayat_sinyal;
 CREATE TRIGGER trg_riwayat_sinyal_geom
   BEFORE INSERT OR UPDATE OF latitude, longitude ON riwayat_sinyal
   FOR EACH ROW
   EXECUTE FUNCTION update_geom_from_latlon();
 
 -- Trigger for tower
+DROP TRIGGER IF EXISTS trg_tower_geom ON tower;
 CREATE TRIGGER trg_tower_geom
   BEFORE INSERT OR UPDATE OF latitude, longitude ON tower
   FOR EACH ROW

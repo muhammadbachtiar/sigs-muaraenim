@@ -13,7 +13,7 @@ export async function GET(request: Request) {
 
     const where: any = {}
     if (statusVerifikasi) where.statusVerifikasi = statusVerifikasi
-    if (kecamatanId) where.kecamatanId = parseInt(kecamatanId, 10)
+    if (kecamatanId) where.kecamatanId = kecamatanId
 
     const data = await prisma.tower.findMany({
       where,

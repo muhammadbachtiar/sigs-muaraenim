@@ -2,12 +2,15 @@ import { prisma } from '@/lib/prisma'
 import { requireAuth, successResponse, errorResponse, notFoundResponse, serverErrorResponse, parseId } from '@/lib/api-helpers'
 import { z } from 'zod'
 
+import bcrypt from 'bcryptjs'
+
 type RouteContext = { params: Promise<{ id: string }> }
 
 const updateUserSchema = z.object({
   nama: z.string().min(1).optional(),
   isActive: z.boolean().optional(),
-  desaKelurahanId: z.number().int().positive().optional(),
+  desaKelurahanId: z.string().uuid().optional(),
+  password: z.string().min(6, 'Password minimal 6 karakter').optional(),
 })
 
 export async function PUT(request: Request, { params }: RouteContext) {
@@ -27,9 +30,22 @@ export async function PUT(request: Request, { params }: RouteContext) {
     if (!existing) return notFoundResponse('User tidak ditemukan')
     if (existing.role === 'SUPER_ADMIN') return errorResponse('Tidak dapat mengubah akun Super Admin')
 
+    const updateData: any = {
+      nama: parsed.data.nama,
+      isActive: parsed.data.isActive,
+      desaKelurahanId: parsed.data.desaKelurahanId,
+    }
+
+    if (parsed.data.password) {
+      updateData.password = await bcrypt.hash(parsed.data.password, 12)
+    }
+
+    // Clean undefined fields
+    Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key])
+
     const data = await prisma.user.update({
       where: { id },
-      data: parsed.data,
+      data: updateData,
       select: { id: true, username: true, nama: true, role: true, isActive: true, desaKelurahanId: true },
     })
 

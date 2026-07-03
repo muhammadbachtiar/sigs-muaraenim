@@ -5,10 +5,10 @@ import { authOptions } from '@/lib/auth'
 // ─── Types ───
 
 export type ApiUser = {
-  id: number
+  id: string
   role: 'SUPER_ADMIN' | 'PEMDES'
   nama: string
-  desaKelurahanId: number | null
+  desaKelurahanId: string | null
 }
 
 type ApiResponseOptions = {
@@ -104,9 +104,6 @@ export function parseSearchParams(request: Request) {
   return new URL(request.url).searchParams
 }
 
-// ─── ID Parser (for dynamic routes) ───
-
-export function parseId(id: string): number | null {
-  const parsed = parseInt(id, 10)
-  return isNaN(parsed) ? null : parsed
+export function parseId(id: string): string | null {
+  return id && id.trim() !== '' ? id : null
 }

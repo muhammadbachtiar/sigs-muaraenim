@@ -19,7 +19,7 @@ export async function GET(request: Request) {
     }
 
     const operatorId = params.get('operator_id')
-    if (operatorId) where.operatorId = parseInt(operatorId, 10)
+    if (operatorId) where.operatorId = operatorId
 
     // Default 6 bulan terakhir
     const defaultDate = new Date()

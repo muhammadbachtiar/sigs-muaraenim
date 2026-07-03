@@ -6,9 +6,9 @@ export const loginSchema = z.object({
 })
 
 export const sinyalSchema = z.object({
-  desaKelurahanId: z.number().int().positive(),
-  operatorId: z.number().int().positive(),
-  teknologiId: z.number().int().positive(),
+  desaKelurahanId: z.string().uuid(),
+  operatorId: z.string().uuid(),
+  teknologiId: z.string().uuid(),
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
   rsrp: z.number().nullable().optional(),
@@ -20,16 +20,16 @@ export const sinyalSchema = z.object({
 })
 
 export const towerSchema = z.object({
-  desaKelurahanId: z.number().int().positive().optional(),
-  kecamatanId: z.number().int().positive(),
+  desaKelurahanId: z.string().uuid().optional(),
+  kecamatanId: z.string().uuid(),
   namaTower: z.string().min(1, 'Nama tower wajib diisi'),
   deskripsiLokasi: z.string().optional(),
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
   tinggiKategori: z.string().optional(),
-  operatorIds: z.array(z.number().int().positive()),
-  teknologiIds: z.array(z.number().int().positive()),
-  mediaIds: z.array(z.number().int().positive()),
+  operatorIds: z.array(z.string().uuid()),
+  teknologiIds: z.array(z.string().uuid()),
+  mediaIds: z.array(z.string().uuid()),
 })
 
 export const bboxSchema = z.object({
@@ -55,7 +55,7 @@ export const kecamatanSchema = z.object({
 })
 
 export const desaSchema = z.object({
-  kecamatanId: z.number().int().positive(),
+  kecamatanId: z.string().uuid(),
   nama: z.string().min(1, 'Nama desa wajib diisi'),
   tipe: z.enum(['DESA', 'KELURAHAN']),
   kodeDesa: z.string().optional(),

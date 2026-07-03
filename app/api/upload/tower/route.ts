@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     if (!file) return errorResponse('File wajib diupload')
     if (!towerId) return errorResponse('tower_id wajib diisi')
 
-    const tower = await prisma.tower.findUnique({ where: { id: parseInt(towerId as string, 10) } })
+    const tower = await prisma.tower.findUnique({ where: { id: towerId as string } })
     if (!tower) return errorResponse('Data tower tidak ditemukan')
 
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
 
     const buffer = Buffer.from(await file.arrayBuffer())
 
-    let processedBuffer = buffer
+    let processedBuffer: Buffer<any> = buffer
     if (buffer.length > MAX_SIZE_BYTES) {
       processedBuffer = await sharp(buffer).resize(1920, null, { withoutEnlargement: true }).jpeg({ quality: 80 }).toBuffer()
     }
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
 
     const url = `/uploads/tower/${filename}`
     const foto = await prisma.fotoTower.create({
-      data: { towerId: parseInt(towerId as string, 10), userId: user!.id, url, keterangan: keterangan || null },
+      data: { towerId: towerId as string, userId: user!.id, url, keterangan: keterangan || null },
     })
 
     return createdResponse(foto, 'Foto tower berhasil diupload')

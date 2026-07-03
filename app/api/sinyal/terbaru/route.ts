@@ -21,9 +21,9 @@ export async function GET(request: Request) {
     const kecamatanId = params.get('kecamatan_id')
     const operatorId = params.get('operator_id')
 
-    if (desaId) where.desaKelurahanId = parseInt(desaId, 10)
-    if (kecamatanId) where.desaKelurahan = { kecamatanId: parseInt(kecamatanId, 10) }
-    if (operatorId) where.operatorId = parseInt(operatorId, 10)
+    if (desaId) where.desaKelurahanId = desaId
+    if (kecamatanId) where.desaKelurahan = { kecamatanId }
+    if (operatorId) where.operatorId = operatorId
 
     // BBOX
     const minLat = params.get('minLat')

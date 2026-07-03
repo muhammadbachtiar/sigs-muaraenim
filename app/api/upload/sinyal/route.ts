@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     if (!file) return errorResponse('File wajib diupload')
     if (!sinyalId) return errorResponse('sinyal_id wajib diisi')
 
-    const sinyal = await prisma.riwayatSinyal.findUnique({ where: { id: parseInt(sinyalId as string, 10) } })
+    const sinyal = await prisma.riwayatSinyal.findUnique({ where: { id: sinyalId as string } })
     if (!sinyal) return errorResponse('Data sinyal tidak ditemukan')
 
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     const buffer = Buffer.from(await file.arrayBuffer())
 
     // Compress if > 3MB
-    let processedBuffer = buffer
+    let processedBuffer: Buffer<any> = buffer
     if (buffer.length > MAX_SIZE_BYTES) {
       processedBuffer = await sharp(buffer).resize(1920, null, { withoutEnlargement: true }).jpeg({ quality: 80 }).toBuffer()
     }
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
 
     const url = `/uploads/sinyal/${filename}`
     const foto = await prisma.fotoSinyal.create({
-      data: { sinyalId: parseInt(sinyalId as string, 10), userId: user!.id, url, keterangan: keterangan || null },
+      data: { sinyalId: sinyalId as string, userId: user!.id, url, keterangan: keterangan || null },
     })
 
     return createdResponse(foto, 'Foto sinyal berhasil diupload')

@@ -11,7 +11,7 @@ export async function GET(request: Request) {
     const kecamatanId = params.get('kecamatan_id')
 
     const where: any = {}
-    if (kecamatanId) where.kecamatanId = parseInt(kecamatanId, 10)
+    if (kecamatanId) where.kecamatanId = kecamatanId
 
     const data = await prisma.desaKelurahan.findMany({
       where,
