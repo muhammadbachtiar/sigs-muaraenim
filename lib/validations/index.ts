@@ -20,16 +20,16 @@ export const sinyalSchema = z.object({
 })
 
 export const towerSchema = z.object({
-  desaKelurahanId: z.string().uuid().optional(),
-  kecamatanId: z.string().uuid(),
+  desaKelurahanId: z.string().uuid().nullable().optional().or(z.literal('')).transform(val => val ? val : undefined),
+  kecamatanId: z.string().uuid({ message: 'Kecamatan wajib dipilih' }),
   namaTower: z.string().min(1, 'Nama tower wajib diisi'),
-  deskripsiLokasi: z.string().optional(),
-  latitude: z.number().min(-90).max(90),
-  longitude: z.number().min(-180).max(180),
-  tinggiKategori: z.string().optional(),
-  operatorIds: z.array(z.string().uuid()),
-  teknologiIds: z.array(z.string().uuid()),
-  mediaIds: z.array(z.string().uuid()),
+  deskripsiLokasi: z.string().nullable().optional(),
+  latitude: z.number().min(-90, 'Latitude minimal -90').max(90, 'Latitude maksimal 90'),
+  longitude: z.number().min(-180, 'Longitude minimal -180').max(180, 'Longitude maksimal 180'),
+  tinggiKategori: z.string().nullable().optional(),
+  operatorIds: z.array(z.string().uuid()).default([]),
+  teknologiIds: z.array(z.string().uuid()).default([]),
+  mediaIds: z.array(z.string().uuid()).default([]),
 })
 
 export const bboxSchema = z.object({
@@ -78,5 +78,5 @@ export const demografiSchema = z.object({
 
 export const verifyTowerSchema = z.object({
   statusVerifikasi: z.enum(['APPROVED', 'REJECTED']),
-  alasanPenolakan: z.string().optional(),
+  alasanPenolakan: z.string().nullable().optional(),
 })

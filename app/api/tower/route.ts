@@ -10,19 +10,19 @@ export async function GET(request: Request) {
     const params = parseSearchParams(request)
     const { page, pageSize, skip, take, search } = parsePagination(params)
 
-    const where: any = {}
-    // Tower adalah data global — TIDAK ada tenant isolation
-
     const statusVerifikasi = params.get('status_verifikasi')
     const desaId = params.get('desa_id')
     const kecamatanId = params.get('kecamatan_id')
 
-    if (statusVerifikasi) where.statusVerifikasi = statusVerifikasi
-    if (desaId) where.desaKelurahanId = desaId
-    if (kecamatanId) where.kecamatanId = kecamatanId
-    if (search) where.namaTower = { contains: search, mode: 'insensitive' }
+    const whereBase: any = {}
+    if (desaId) whereBase.desaKelurahanId = desaId
+    if (kecamatanId) whereBase.kecamatanId = kecamatanId
+    if (search) whereBase.namaTower = { contains: search, mode: 'insensitive' }
 
-    const [data, total] = await Promise.all([
+    const where: any = { ...whereBase }
+    if (statusVerifikasi) where.statusVerifikasi = statusVerifikasi
+
+    const [data, totalFiltered, totalAll, totalPending, totalApproved, totalRejected] = await Promise.all([
       prisma.tower.findMany({
         where,
         skip,
@@ -31,7 +31,7 @@ export async function GET(request: Request) {
         include: {
           kecamatan: { select: { id: true, nama: true } },
           desaKelurahan: { select: { id: true, nama: true } },
-          user: { select: { id: true, nama: true } },
+          user: { select: { id: true, nama: true, role: true } },
           towerOperator: { include: { operator: { select: { id: true, nama: true } } } },
           towerTeknologi: { include: { teknologi: { select: { id: true, nama: true } } } },
           towerMedia: { include: { mediaTransmisi: { select: { id: true, nama: true } } } },
@@ -39,9 +39,19 @@ export async function GET(request: Request) {
         },
       }),
       prisma.tower.count({ where }),
+      prisma.tower.count({ where: whereBase }),
+      prisma.tower.count({ where: { ...whereBase, statusVerifikasi: 'PENDING' } }),
+      prisma.tower.count({ where: { ...whereBase, statusVerifikasi: 'APPROVED' } }),
+      prisma.tower.count({ where: { ...whereBase, statusVerifikasi: 'REJECTED' } }),
     ])
 
-    return successResponse(data, 'Data tower berhasil diambil', paginationMeta(total, page, pageSize))
+    return successResponse(data, 'Data tower berhasil diambil', {
+      ...paginationMeta(totalFiltered, page, pageSize),
+      totalAll,
+      totalPending,
+      totalApproved,
+      totalRejected,
+    })
   } catch {
     return serverErrorResponse()
   }

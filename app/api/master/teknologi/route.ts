@@ -8,6 +8,15 @@ export async function GET(request: Request) {
     if (error) return error
 
     const params = parseSearchParams(request)
+    const isSelect = params.get('is_select') === 'true'
+    if (isSelect) {
+      const data = await prisma.teknologi.findMany({
+        orderBy: { nama: 'asc' },
+        select: { id: true, nama: true }
+      })
+      return successResponse(data, 'Data teknologi untuk select berhasil diambil')
+    }
+
     const { page, pageSize, skip, take, search } = parsePagination(params)
 
     const where = search ? { nama: { contains: search, mode: 'insensitive' as const } } : {}
