@@ -22,6 +22,27 @@ export async function GET(request: Request) {
     const where: any = { ...whereBase }
     if (statusVerifikasi) where.statusVerifikasi = statusVerifikasi
 
+    // Mode peta: skip pagination, return field minimal, max 5000 (hanya APPROVED kecuali diminta spesifik)
+    if (params.get('for_map') === 'true') {
+      const mapWhere = { ...whereBase, statusVerifikasi: statusVerifikasi || 'APPROVED' }
+      const data = await prisma.tower.findMany({
+        where: mapWhere,
+        select: {
+          id: true,
+          namaTower: true,
+          latitude: true,
+          longitude: true,
+          tinggiKategori: true,
+          kecamatan: { select: { id: true, nama: true } },
+          desaKelurahan: { select: { id: true, nama: true } },
+          towerOperator: { include: { operator: { select: { id: true, nama: true } } } },
+          towerTeknologi: { include: { teknologi: { select: { id: true, nama: true } } } },
+        },
+        take: 5000,
+      })
+      return successResponse(data, 'Data peta tower berhasil diambil', { total: data.length })
+    }
+
     const [data, totalFiltered, totalAll, totalPending, totalApproved, totalRejected] = await Promise.all([
       prisma.tower.findMany({
         where,

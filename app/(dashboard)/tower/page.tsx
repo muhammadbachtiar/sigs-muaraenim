@@ -6,9 +6,19 @@ import {
   TowerControl, Plus, Search, MapPin, Pencil, CheckCircle2, AlertCircle,
   XCircle, Clock, Eye, Trash2, Camera, Upload, Loader2, RefreshCw,
   ShieldCheck, ArrowUpRight, FileText, Check, X, Building, Radio, Wifi, Network,
-  ImageIcon, Sparkles, AlertTriangle, LayoutGrid, List
+  ImageIcon, Sparkles, AlertTriangle, LayoutGrid, List, Map
 } from 'lucide-react'
 import { toast } from 'sonner'
+import dynamic from 'next/dynamic'
+
+const TowerMap = dynamic(() => import('@/components/map/TowerMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-[450px] rounded-xl border border-hairline bg-[var(--color-surface)] flex items-center justify-center text-xs text-muted-foreground">
+      <Loader2 size={18} className="animate-spin mr-2" /> Memuat Peta Tower...
+    </div>
+  ),
+})
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -76,7 +86,7 @@ export default function TowerPage() {
   // --- MAIN STATES ---
   const [towers, setTowers] = useState<TowerItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid')
+  const [viewMode, setViewMode] = useState<'grid' | 'table' | 'map'>('grid')
 
   // Meta stats
   const [totalAll, setTotalAll] = useState(0)
@@ -735,7 +745,7 @@ export default function TowerPage() {
             )}
           </div>
 
-          {/* View Mode Toggle Switch (Grid vs Table) */}
+          {/* View Mode Toggle Switch (Grid vs Table vs Map) */}
           <div className="flex items-center border border-hairline rounded-lg p-0.5 bg-[var(--color-surface)] shadow-xs shrink-0 self-end sm:self-auto">
             <button
               onClick={() => setViewMode('grid')}
@@ -757,12 +767,34 @@ export default function TowerPage() {
             >
               <List size={14} /> Tabel
             </button>
+            <button
+              onClick={() => setViewMode('map')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${viewMode === 'map'
+                  ? 'bg-primary text-primary-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+                }`}
+              title="Tampilan Peta"
+            >
+              <Map size={14} /> Peta
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Main Content Area: Grid View vs Table View */}
-      {loading ? (
+      {/* Main Content Area: Grid View vs Table View vs Map View */}
+      {viewMode === 'map' ? (
+        <TowerMap
+          filterKecId={filterKecId}
+          filterDesaId={filterDesaId}
+          onSelectDetail={(id) => {
+            const found = towers.find(t => t.id === id)
+            if (found) openDetailModal(found)
+            else fetch(`/api/tower/${id}`).then(r => r.json()).then(res => { if (res.success) openDetailModal(res.data) })
+          }}
+        />
+      ) : (
+        <>
+          {loading ? (
         <div className="flex items-center justify-center py-20">
           <Loader2 size={24} className="animate-spin text-muted-foreground" />
         </div>
@@ -1114,6 +1146,8 @@ export default function TowerPage() {
             </Button>
           </div>
         </div>
+      )}
+        </>
       )}
 
       {/* ==========================================================

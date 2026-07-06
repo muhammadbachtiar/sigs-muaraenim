@@ -16,6 +16,16 @@ import {
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
+import dynamic from 'next/dynamic'
+
+const DashboardMap = dynamic(() => import('@/components/map/DashboardMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-[360px] rounded-xl border border-[var(--color-hairline)] bg-[var(--color-surface)] flex items-center justify-center text-xs text-muted-foreground">
+      <Loader2 size={18} className="animate-spin mr-2" /> Memuat Peta Sebaran...
+    </div>
+  ),
+})
 
 type DashboardStats = {
   totalSinyal: number
@@ -144,6 +154,9 @@ export default function DashboardPage() {
         <StatCard label="Sinyal Sedang" value={stats?.sinyalSedang ?? 0} icon={BarChart3} color="#eab308" delay={180} />
         <StatCard label="Sinyal Buruk" value={stats?.sinyalBuruk ?? 0} icon={BarChart3} color="#ef4444" delay={240} />
       </div>
+
+      {/* Interactive Map Section */}
+      <DashboardMap />
 
       {/* Two-column cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

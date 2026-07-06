@@ -9,29 +9,56 @@ export async function GET(request: Request) {
     if (error) return error
 
     const params = parseSearchParams(request)
-    const { page, pageSize, skip, take } = parsePagination(params)
 
     const where: any = {}
 
-    // Tenant isolation: PEMDES hanya lihat data desanya
+    // Tenant isolation: PEMDES hanya lihat data desanya — tidak bisa di-override
     if (user!.role === 'PEMDES' && user!.desaKelurahanId) {
       where.desaKelurahanId = user!.desaKelurahanId
+    } else if (user!.role === 'SUPER_ADMIN') {
+      // Admin bisa filter by desa atau kecamatan
+      const desaId = params.get('desa_id')
+      const kecamatanId = params.get('kecamatan_id')
+      if (desaId) where.desaKelurahanId = desaId
+      if (kecamatanId) where.desaKelurahan = { kecamatanId }
     }
 
-    // Filters
-    const desaId = params.get('desa_id')
-    const kecamatanId = params.get('kecamatan_id')
-    const operatorId = params.get('operator_id')
+    // Filter operator (bisa multi, comma-separated)
+    const operatorIdParam = params.get('operator_id')
+    if (operatorIdParam) {
+      const ids = operatorIdParam.split(',').filter(Boolean)
+      where.operatorId = ids.length === 1 ? ids[0] : { in: ids }
+    }
+
+    // Filter teknologi (bisa multi, comma-separated)
+    const teknologiIdParam = params.get('teknologi_id')
+    if (teknologiIdParam) {
+      const ids = teknologiIdParam.split(',').filter(Boolean)
+      where.teknologiId = ids.length === 1 ? ids[0] : { in: ids }
+    }
+
+    // Filter RSRP range
     const rsrpMin = params.get('rsrp_min')
     const rsrpMax = params.get('rsrp_max')
-
-    if (desaId) where.desaKelurahanId = desaId
-    if (kecamatanId) where.desaKelurahan = { kecamatanId }
-    if (operatorId) where.operatorId = operatorId
     if (rsrpMin || rsrpMax) {
       where.rsrp = {}
       if (rsrpMin) where.rsrp.gte = parseFloat(rsrpMin)
       if (rsrpMax) where.rsrp.lte = parseFloat(rsrpMax)
+    }
+
+    // Filter tanggal range (manual override 6 bulan)
+    const tanggalDari = params.get('tanggal_dari')
+    const tanggalSampai = params.get('tanggal_sampai')
+    const allTime = params.get('all_time')
+
+    if (tanggalDari || tanggalSampai) {
+      where.tanggalPengukuran = {}
+      if (tanggalDari) where.tanggalPengukuran.gte = new Date(tanggalDari)
+      if (tanggalSampai) where.tanggalPengukuran.lte = new Date(tanggalSampai)
+    } else if (!allTime) {
+      const defaultDate = new Date()
+      defaultDate.setMonth(defaultDate.getMonth() - DEFAULT_DATA_MONTHS)
+      where.tanggalPengukuran = { gte: defaultDate }
     }
 
     // BBOX filter
@@ -44,12 +71,27 @@ export async function GET(request: Request) {
       where.longitude = { gte: parseFloat(minLng), lte: parseFloat(maxLng) }
     }
 
-    // Default: 6 bulan terakhir
-    const defaultDate = new Date()
-    defaultDate.setMonth(defaultDate.getMonth() - DEFAULT_DATA_MONTHS)
-    if (!params.get('all_time')) {
-      where.tanggalPengukuran = { gte: defaultDate }
+    // Mode peta: skip pagination, return field minimal, max 5000
+    if (params.get('for_map') === 'true') {
+      const data = await prisma.riwayatSinyal.findMany({
+        where,
+        select: {
+          id: true,
+          latitude: true,
+          longitude: true,
+          rsrp: true,
+          tanggalPengukuran: true,
+          operator: { select: { id: true, nama: true } },
+          teknologi: { select: { id: true, nama: true } },
+          desaKelurahan: { select: { id: true, nama: true } },
+        },
+        take: 5000,
+        orderBy: { tanggalPengukuran: 'desc' },
+      })
+      return successResponse(data, 'Data peta sinyal berhasil diambil', { total: data.length })
     }
+
+    const { page, pageSize, skip, take } = parsePagination(params)
 
     const [data, total] = await Promise.all([
       prisma.riwayatSinyal.findMany({
@@ -73,6 +115,7 @@ export async function GET(request: Request) {
     return serverErrorResponse()
   }
 }
+
 
 export async function POST(request: Request) {
   try {
