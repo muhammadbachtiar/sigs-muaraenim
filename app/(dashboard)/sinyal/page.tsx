@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react'
 import {
   Signal, Plus, X, Download, ChevronLeft, ChevronRight,
   Eye, Pencil, Trash2, Loader2, SlidersHorizontal, RefreshCw,
-  TriangleAlert, MapPin, Search, Map, List,
+  TriangleAlert, MapPin, Search, Map, List, Brain,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -57,7 +57,7 @@ export default function SinyalPage() {
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
-  const [viewMode, setViewMode] = useState<'table' | 'map'>('table')
+  const [viewMode, setViewMode] = useState<'table' | 'map' | 'idw'>('table')
 
   // Filter state
   const [showFilter, setShowFilter] = useState(false)
@@ -267,6 +267,17 @@ export default function SinyalPage() {
             >
               <Map size={14} /> Peta
             </button>
+            <button
+              onClick={() => setViewMode('idw')}
+              title="Analisis prediksi sinyal dengan algoritma IDW"
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                viewMode === 'idw'
+                  ? 'bg-purple-600 text-white shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Brain size={14} /> IDW
+            </button>
           </div>
 
           <Button variant="outline" size="sm" onClick={exportCsv} className="gap-1.5 text-xs">
@@ -443,8 +454,8 @@ export default function SinyalPage() {
         </CardContent>
       </Card>
 
-      {/* Table vs Map View */}
-      {viewMode === 'map' ? (
+      {/* Table vs Map vs IDW View */}
+      {viewMode === 'map' || viewMode === 'idw' ? (
         <SinyalMap
           selectedOperators={selectedOperators}
           selectedTeknologi={selectedTeknologi}
@@ -452,6 +463,11 @@ export default function SinyalPage() {
           selectedDesa={selectedDesa}
           tanggalDari={tanggalDari}
           tanggalSampai={tanggalSampai}
+          idwMode={viewMode === 'idw'}
+          desaList={desaList}
+          kecamatanList={kecamatanList}
+          userRole={userRole}
+          userDesaId={userDesaId}
           onSelectDetail={(id) => {
             const found = items.find(i => i.id === id)
             if (found) openDetail(found)

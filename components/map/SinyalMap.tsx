@@ -4,7 +4,12 @@ import React, { useState, useEffect, useCallback } from 'react'
 import LeafletMapBase from './LeafletMapBase'
 import SinyalMarkers, { type SinyalMapItem } from './SinyalMarkers'
 import MapLegend from './MapLegend'
+import IdwMarker, { type IdwPredictionPoint } from './IdwMarker'
+import IdwGridLayer from './IdwGridLayer'
+import IdwPanel from './IdwPanel'
 import { Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
+import type { IdwGridCell } from '@/lib/idw'
 
 type Props = {
   selectedOperators?: string[]
@@ -14,6 +19,12 @@ type Props = {
   tanggalDari?: string
   tanggalSampai?: string
   onSelectDetail?: (id: string) => void
+  // IDW Mode Props
+  idwMode?: boolean
+  desaList?: Array<{ id: string; nama: string }>
+  kecamatanList?: Array<{ id: string; nama: string }>
+  userRole?: string
+  userDesaId?: string | null
 }
 
 export default function SinyalMap({
@@ -24,9 +35,21 @@ export default function SinyalMap({
   tanggalDari = '',
   tanggalSampai = '',
   onSelectDetail,
+  idwMode = false,
+  desaList = [],
+  kecamatanList = [],
+  userRole,
+  userDesaId,
 }: Props) {
   const [data, setData] = useState<SinyalMapItem[]>([])
   const [loading, setLoading] = useState(true)
+
+  // IDW state
+  const [idwPrediction, setIdwPrediction] = useState<IdwPredictionPoint | null>(null)
+  const [idwGrid, setIdwGrid] = useState<IdwGridCell[]>([])
+  const [idwGridResolution, setIdwGridResolution] = useState(200)
+  const [idwGridStats, setIdwGridStats] = useState<any | null>(null)
+  const [savingResult, setSavingResult] = useState(false)
 
   const buildParams = useCallback(() => {
     const p = new URLSearchParams({ for_map: 'true' })
@@ -57,6 +80,40 @@ export default function SinyalMap({
     fetchData()
   }, [fetchData])
 
+  // Simpan hasil IDW ke riwayat sinyal
+  const handleSaveIdwResult = useCallback(async (point: IdwPredictionPoint) => {
+    setSavingResult(true)
+    try {
+      const res = await fetch('/api/sinyal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          latitude: point.latitude,
+          longitude: point.longitude,
+          rsrp: point.rsrp,
+          rssi: point.rssi,
+          rsrq: point.rsrq,
+          snr: point.snr,
+          // Simpan ke desa user jika ada, atau kosong
+          desaKelurahanId: userDesaId || undefined,
+          // Tandai sebagai estimasi IDW di catatan
+          catatan: `[IDW Estimasi] p=${point.params.p}, N=${point.neighborsUsed}, r=${point.params.radius}km`,
+          tanggalPengukuran: new Date().toISOString(),
+        }),
+      }).then((r) => r.json())
+
+      if (res.success) {
+        toast.success('Hasil prediksi IDW berhasil disimpan ke riwayat sinyal.')
+      } else {
+        toast.error(res.message || 'Gagal menyimpan data.')
+      }
+    } catch {
+      toast.error('Terjadi kesalahan saat menyimpan data.')
+    } finally {
+      setSavingResult(false)
+    }
+  }, [userDesaId])
+
   return (
     <div className="relative w-full">
       {loading && (
@@ -68,15 +125,53 @@ export default function SinyalMap({
         </div>
       )}
 
+      {/* Kursor crosshair saat mode IDW aktif */}
       <LeafletMapBase height="calc(100vh - 280px)">
         <SinyalMarkers items={data} onSelectDetail={onSelectDetail} />
         <MapLegend showSinyal={true} showTower={false} />
+
+        {/* IDW Layers (hanya saat idwMode aktif) */}
+        {idwMode && (
+          <>
+            {idwGrid.length > 0 && (
+              <IdwGridLayer cells={idwGrid} resolutionM={idwGridResolution} opacity={0.55} />
+            )}
+            {idwPrediction && (
+              <IdwMarker
+                point={idwPrediction}
+                onSave={() => handleSaveIdwResult(idwPrediction)}
+              />
+            )}
+            <IdwPanel
+              desaList={desaList}
+              kecamatanList={kecamatanList}
+              selectedOperatorId={selectedOperators[0]}
+              onPrediction={(point) => setIdwPrediction(point)}
+              onGridResult={(cells, res, stats) => {
+                setIdwGrid(cells)
+                setIdwGridResolution(res)
+                setIdwGridStats(stats)
+              }}
+              onClearGrid={() => { setIdwGrid([]); setIdwGridStats(null) }}
+              onSavePoint={handleSaveIdwResult}
+              userRole={userRole}
+              userDesaId={userDesaId}
+            />
+          </>
+        )}
       </LeafletMapBase>
 
-      {/* Info bar bottom */}
+      {/* Info bar */}
       <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-        <span>Menampilkan {data.length} titik sinyal</span>
-        <span>Filter waktu & operator aktif</span>
+        <div className="flex items-center gap-3">
+          <span>Menampilkan {data.length} titik sinyal</span>
+          {idwMode && idwGrid.length > 0 && idwGridStats && (
+            <span className="text-purple-600 font-medium">
+              + Grid IDW: {idwGridStats.validCells}/{idwGridStats.totalCells} sel
+            </span>
+          )}
+        </div>
+        <span>{idwMode ? '🧠 Mode Analisis IDW Aktif' : 'Filter waktu & operator aktif'}</span>
       </div>
     </div>
   )
