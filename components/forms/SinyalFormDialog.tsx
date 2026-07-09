@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { Loader2, MapPin, X, Camera } from 'lucide-react'
+import { useState, useEffect, useRef, useMemo } from 'react'
+import { Loader2, MapPin, X, Camera, TriangleAlert, TowerControl } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,9 +9,10 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
 
-type Desa = { id: string; nama: string; kecamatan: { nama: string } }
+type Desa = { id: string; nama: string; latitude: number | null; longitude: number | null; kecamatan: { nama: string } }
 type Operator = { id: string; nama: string }
 type Teknologi = { id: string; nama: string }
+type TowerMapItem = { id: string; namaTower: string; latitude: number; longitude: number }
 
 export type SinyalFormData = {
   id: string
@@ -75,6 +76,14 @@ function parseNum(val: string): number | null {
   return isNaN(n) ? null : n
 }
 
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLng = (lng2 - lng1) * Math.PI / 180
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
 function validateForm(form: FormState, userRole: string, userDesaId?: string | null): FormErrors {
   const errors: FormErrors = {}
   if (!form.desaKelurahanId) errors.desaKelurahanId = 'Desa/Kelurahan wajib dipilih'
@@ -97,6 +106,7 @@ export default function SinyalFormDialog({ open, onClose, onSuccess, editData, u
   const [desaList, setDesaList] = useState<Desa[]>([])
   const [operatorList, setOperatorList] = useState<Operator[]>([])
   const [teknologiList, setTeknologiList] = useState<Teknologi[]>([])
+  const [towerList, setTowerList] = useState<TowerMapItem[]>([])
   const [loadingOptions, setLoadingOptions] = useState(true)
   const [form, setForm] = useState<FormState>(() => emptyForm(userRole, userDesaId))
   const [errors, setErrors] = useState<FormErrors>({})
@@ -115,12 +125,48 @@ export default function SinyalFormDialog({ open, onClose, onSuccess, editData, u
       fetch('/api/master/desa?page_size=200').then(r => r.json()),
       fetch('/api/master/operator?page_size=50').then(r => r.json()),
       fetch('/api/master/teknologi?page_size=50').then(r => r.json()),
-    ]).then(([desa, op, tek]) => {
+      fetch('/api/tower?for_map=true').then(r => r.json()),
+    ]).then(([desa, op, tek, towers]) => {
       if (desa.success) setDesaList(desa.data)
       if (op.success) setOperatorList(op.data)
       if (tek.success) setTeknologiList(tek.data)
+      if (towers.success) setTowerList(towers.data)
     }).finally(() => setLoadingOptions(false))
   }, [open])
+
+  // Auto-suggest teknologi when operator is selected
+  useEffect(() => {
+    if (!form.operatorId || form.teknologiId) return
+    const selectedOp = operatorList.find(o => o.id === form.operatorId)
+    if (!selectedOp) return
+    const opName = selectedOp.nama.toLowerCase()
+    const is4gOperator = ['telkomsel', 'indosat', 'xl', 'smartfren', 'tri', '3'].some(k => opName.includes(k))
+    if (is4gOperator) {
+      const lte = teknologiList.find(t => t.nama.toLowerCase().includes('4g') || t.nama.toLowerCase().includes('lte'))
+      if (lte) setField('teknologiId', lte.id)
+    }
+  }, [form.operatorId])
+
+  const selectedDesa = desaList.find(d => d.id === form.desaKelurahanId)
+  const measLat = parseNum(form.latitude)
+  const measLng = parseNum(form.longitude)
+  const rsrpVal = parseNum(form.rsrp)
+
+  const distanceFromCenter = useMemo(() => {
+    if (!selectedDesa?.latitude || !selectedDesa?.longitude || measLat == null || measLng == null) return null
+    return haversineKm(selectedDesa.latitude, selectedDesa.longitude, measLat, measLng)
+  }, [selectedDesa, measLat, measLng])
+
+  const closestTowers = useMemo(() => {
+    if (measLat == null || measLng == null || towerList.length === 0) return []
+    return towerList
+      .map(t => ({ ...t, distance: haversineKm(measLat, measLng, t.latitude, t.longitude) }))
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, 3)
+  }, [measLat, measLng, towerList])
+
+  const noTowerNearby = closestTowers.length > 0 && closestTowers[0].distance > 5
+  const isBlankspot = rsrpVal != null && rsrpVal < -110
 
   useEffect(() => {
     if (!open) return
@@ -365,15 +411,50 @@ export default function SinyalFormDialog({ open, onClose, onSuccess, editData, u
               </div>
             </div>
 
-            {/* Signal values */}
+            {/* Smart Warnings */}
+            {distanceFromCenter != null && distanceFromCenter > 3 && (
+              <div className="flex items-start gap-2 p-2.5 rounded-lg border border-amber-300 bg-amber-50 text-xs text-amber-800">
+                <TriangleAlert size={14} className="shrink-0 mt-0.5 text-amber-600" />
+                <p>Lokasi pengukuran berada {distanceFromCenter.toFixed(1)} km dari pusat desa (lebih dari 3 km). Pastikan koordinat sudah sesuai dengan lokasi pengukuran sebenarnya.</p>
+              </div>
+            )}
+
+            {selectedDesa && selectedDesa.latitude == null && (
+              <div className="flex items-start gap-2 p-2.5 rounded-lg border border-amber-300 bg-amber-50 text-xs text-amber-800">
+                <MapPin size={14} className="shrink-0 mt-0.5 text-amber-600" />
+                <p>Koordinat pusat desa belum diisi. Peringatan jarak tidak dapat dihitung. Harap lengkapi koordinat desa melalui menu Demografi.</p>
+              </div>
+            )}
+
+            {closestTowers.length > 0 && (
+              <div className="p-2.5 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-soft)] text-xs space-y-1.5">
+                <div className="flex items-center gap-1.5 font-semibold text-foreground">
+                  <TowerControl size={13} className="text-primary" />
+                  3 Tower Terdekat
+                </div>
+                {closestTowers.map(t => (
+                  <div key={t.id} className="flex items-center justify-between pl-5">
+                    <span className="text-muted-foreground truncate">{t.namaTower}</span>
+                    <span className={`font-mono font-medium ${t.distance > 5 ? 'text-amber-600' : 'text-foreground'}`}>
+                      {t.distance.toFixed(1)} km
+                    </span>
+                  </div>
+                ))}
+                {noTowerNearby && (
+                  <p className="text-amber-700 mt-1 pl-5">Tidak ditemukan tower dalam radius 5 km dari lokasi ini. Pastikan titik koordinat sudah sesuai.</p>
+                )}
+              </div>
+            )}
+
             <div>
               <Label className="text-xs font-medium mb-1.5 block">Nilai Sinyal (opsional)</Label>
+              <p className="text-[10px] text-muted-foreground mb-2">Masukkan nilai sesuai tangkapan layar aplikasi pengukuran sinyal (Network Cell Info, Opensignal, dll).</p>
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  { id: 'sf-rsrp', key: 'rsrp' as const, label: 'RSRP (dBm)', placeholder: '-140 ~ 0' },
-                  { id: 'sf-rssi', key: 'rssi' as const, label: 'RSSI (dBm)', placeholder: '-110 ~ 0' },
-                  { id: 'sf-rsrq', key: 'rsrq' as const, label: 'RSRQ (dB)', placeholder: '-20 ~ 0' },
-                  { id: 'sf-snr', key: 'snr' as const, label: 'SNR (dB)', placeholder: '-23 ~ 40' },
+                  { id: 'sf-rsrp', key: 'rsrp' as const, label: 'RSRP (dBm)', placeholder: 'Contoh: -95' },
+                  { id: 'sf-rssi', key: 'rssi' as const, label: 'RSSI (dBm)', placeholder: 'Contoh: -75' },
+                  { id: 'sf-rsrq', key: 'rsrq' as const, label: 'RSRQ (dB)', placeholder: 'Contoh: -12' },
+                  { id: 'sf-snr', key: 'snr' as const, label: 'SNR (dB)', placeholder: 'Contoh: 15' },
                 ].map(({ id, key, label, placeholder }) => (
                   <div key={key}>
                     <Label htmlFor={id} className="text-xs text-muted-foreground mb-1 block">{label}</Label>
@@ -390,6 +471,18 @@ export default function SinyalFormDialog({ open, onClose, onSuccess, editData, u
                 ))}
               </div>
             </div>
+
+            {/* Blankspot Warning */}
+            {isBlankspot && (
+              <div className="flex items-start gap-2 p-2.5 rounded-lg border border-red-200 bg-red-50 text-xs text-red-800">
+                <TriangleAlert size={14} className="shrink-0 mt-0.5 text-red-500" />
+                <p>Hasil pengukuran menunjukkan sinyal sangat lemah (kemungkinan area blankspot). Disarankan mengunggah foto bukti tangkapan layar kondisi sinyal perangkat.</p>
+              </div>
+            )}
+
+            {form.operatorId && form.teknologiId && (
+              <p className="text-[10px] text-muted-foreground">*Teknologi otomatis terpilih berdasarkan operator. Anda dapat mengubahnya secara manual.</p>
+            )}
 
             {/* Catatan */}
             <div>

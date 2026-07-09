@@ -1,11 +1,11 @@
 'use client'
 
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import { useMapEvents } from 'react-leaflet'
 import {
   Brain, Crosshair, ChevronDown, ChevronUp, Loader2, X,
   Info, Sliders, TriangleAlert, Save, LayoutGrid, Target,
-  CheckCircle2,
+  CheckCircle2, HelpCircle,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { IdwGridCell } from '@/lib/idw'
@@ -103,6 +103,15 @@ export default function IdwPanel({
   // State panel
   const [isMinimized, setIsMinimized] = useState(false)
   const [activeTab, setActiveTab] = useState<'single' | 'grid'>('single')
+  const [showInfoModal, setShowInfoModal] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
 
   // Click capture mode
   const [clickMode, setClickMode] = useState(false)
@@ -247,23 +256,46 @@ export default function IdwPanel({
     <>
       <ClickCapture active={clickMode} onCoord={handleCoordCapture} />
 
-      {/* Floating Panel */}
+      {/* Educational Modal */}
+      {showInfoModal && <IdwInfoModal onClose={() => setShowInfoModal(false)} />}
+
+      {/* Floating Panel — desktop: top-left, mobile: bottom sheet */}
       <div
-        className="absolute top-3 left-3 z-[450] w-72 bg-white/98 dark:bg-gray-900/98 backdrop-blur-md rounded-2xl border border-[var(--color-hairline)] shadow-elevated overflow-hidden"
+        className={`z-[450] bg-white/98 dark:bg-gray-900/98 backdrop-blur-md border border-[var(--color-hairline)] shadow-elevated overflow-hidden ${
+          isMobile
+            ? 'fixed bottom-0 left-0 right-0 w-full rounded-t-2xl max-h-[55vh] flex flex-col border-t-2'
+            : 'absolute top-3 left-3 w-72 rounded-2xl'
+        }`}
         style={{ fontFamily: 'Inter, sans-serif' }}
       >
+        {/* Drag bar for mobile */}
+        {isMobile && (
+          <div className="flex justify-center pt-2 pb-1">
+            <div className="w-10 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />
+          </div>
+        )}
+
         {/* Panel Header */}
         <div className="flex items-center justify-between px-3.5 py-2.5 bg-gradient-to-r from-purple-600 to-purple-500 text-white">
           <div className="flex items-center gap-2">
             <Brain size={16} />
             <span className="text-xs font-bold tracking-tight">Analisis IDW</span>
           </div>
-          <button
-            onClick={() => setIsMinimized(!isMinimized)}
-            className="p-0.5 rounded hover:bg-white/20 transition-colors"
-          >
-            {isMinimized ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setShowInfoModal(true)}
+              className="p-1 rounded hover:bg-white/20 transition-colors"
+              title="Pelajari cara kerja IDW"
+            >
+              <HelpCircle size={14} />
+            </button>
+            <button
+              onClick={() => setIsMinimized(!isMinimized)}
+              className="p-0.5 rounded hover:bg-white/20 transition-colors"
+            >
+              {isMinimized ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+            </button>
+          </div>
         </div>
 
         {!isMinimized && (
@@ -288,7 +320,7 @@ export default function IdwPanel({
               ))}
             </div>
 
-            <div className="p-3.5 space-y-3 max-h-[65vh] overflow-y-auto">
+            <div className={`p-3.5 space-y-3 overflow-y-auto ${isMobile ? 'max-h-[40vh]' : 'max-h-[65vh]'}`}>
               {/* ── Tab: Titik Tunggal ─── */}
               {activeTab === 'single' && (
                 <>
@@ -586,6 +618,105 @@ function IdwParamsSection({
           />
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Sub Component: IDW Educational Modal ─────────────────────────────────────
+
+function IdwInfoModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-elevated border border-[var(--color-hairline)] max-w-lg w-full max-h-[85vh] overflow-y-auto" style={{ fontFamily: 'Inter, sans-serif' }}>
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-[var(--color-hairline)] bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-t-2xl">
+          <div className="flex items-center gap-2">
+            <Brain size={18} />
+            <span className="text-sm font-bold">Tentang Analisis IDW</span>
+          </div>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-white/20 transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-5 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+          <div>
+            <h3 className="font-bold text-gray-900 dark:text-gray-100 mb-1.5">Apa itu IDW?</h3>
+            <p>
+              <strong>Inverse Distance Weighting (IDW)</strong> adalah metode interpolasi spasial
+              yang digunakan untuk memperkirakan kekuatan sinyal di lokasi yang belum pernah diukur
+              berdasarkan data pengukuran yang sudah ada di sekitarnya.
+            </p>
+            <p className="mt-2">
+              Prinsip dasarnya sederhana: <em>titik pengukuran yang lebih dekat memiliki
+              pengaruh lebih besar</em> terhadap hasil prediksi dibandingkan titik yang jauh.
+            </p>
+          </div>
+
+          <div>
+            <h3 className="font-bold text-gray-900 dark:text-gray-100 mb-1.5">Rumus Perhitungan</h3>
+            <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-xl p-4 text-center">
+              <p className="font-mono text-base font-bold text-purple-800 dark:text-purple-300">
+                Z(s₀) = Σ(wᵢ × Zᵢ) / Σ(wᵢ)
+              </p>
+              <p className="font-mono text-xs text-purple-600 dark:text-purple-400 mt-1">
+                di mana bobot: wᵢ = 1 / dᵢᵖ
+              </p>
+            </div>
+            <ul className="mt-3 space-y-1.5 text-xs text-gray-600 dark:text-gray-400">
+              <li><strong>Z(s₀)</strong> — Nilai prediksi sinyal di lokasi target</li>
+              <li><strong>Zᵢ</strong> — Nilai sinyal terukur di titik ke-i</li>
+              <li><strong>dᵢ</strong> — Jarak dari titik ke-i ke lokasi target</li>
+              <li><strong>wᵢ</strong> — Bobot (semakin dekat, semakin besar)</li>
+              <li><strong>p</strong> — Power parameter (eksponen jarak)</li>
+            </ul>
+          </div>
+
+          <div>
+            <h3 className="font-bold text-gray-900 dark:text-gray-100 mb-1.5">Parameter yang Dapat Diatur</h3>
+            <div className="space-y-3">
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+                <p className="font-semibold text-gray-800 dark:text-gray-200 text-xs">Power Parameter (p)</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Menentukan seberapa cepat pengaruh suatu titik berkurang seiring bertambahnya jarak.
+                  Nilai p=2 (standar) memberikan keseimbangan yang baik. Nilai lebih tinggi membuat
+                  prediksi lebih dipengaruhi oleh titik-titik yang sangat dekat saja.
+                </p>
+              </div>
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+                <p className="font-semibold text-gray-800 dark:text-gray-200 text-xs">Tetangga Maksimum (N)</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Jumlah maksimum titik pengukuran terdekat yang digunakan dalam perhitungan.
+                  Lebih banyak tetangga menghasilkan prediksi yang lebih halus, namun bisa
+                  mengurangi pengaruh kondisi lokal.
+                </p>
+              </div>
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+                <p className="font-semibold text-gray-800 dark:text-gray-200 text-xs">Radius Pencarian (km)</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Batas jarak maksimum untuk mencari titik pengukuran dari lokasi target.
+                  Data di luar radius ini tidak digunakan dalam perhitungan.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 text-xs text-amber-800 dark:text-amber-300">
+            <p className="font-semibold mb-1">Catatan Penting</p>
+            <p>Hasil IDW merupakan estimasi matematis berdasarkan data historis yang tersedia.
+            Hasil ini bukan data resmi pengukuran lapangan dan akurasinya bergantung pada
+            kepadatan serta distribusi titik pengukuran di sekitar lokasi target.</p>
+          </div>
+        </div>
+
+        <div className="px-5 py-3 border-t border-[var(--color-hairline)]">
+          <button
+            onClick={onClose}
+            className="w-full py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-colors"
+          >
+            Mengerti
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

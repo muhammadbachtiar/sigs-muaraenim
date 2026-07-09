@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import {
   Signal,
@@ -13,6 +14,8 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
+  TriangleAlert,
+  MapPin,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
@@ -39,6 +42,16 @@ type DashboardStats = {
   totalOperator: number
   totalTeknologi: number
   totalDesa: number
+  towersNearby?: number
+  desaLatitude?: number | null
+  desaLongitude?: number | null
+  demografiFields?: {
+    jumlahPenduduk: number | null
+    usiaProduktif: number | null
+    kepadatan: number | null
+    rataRataPenghasilan: number | null
+    mataPencaharianUtama: string | null
+  }
 }
 
 type RecentSinyal = {
@@ -105,6 +118,10 @@ function statusBadge(status: string) {
 }
 
 export default function DashboardPage() {
+  const { data: session } = useSession()
+  const user = session?.user as any
+  const isPemdes = user?.role === 'PEMDES'
+
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [recentSinyal, setRecentSinyal] = useState<RecentSinyal[]>([])
   const [recentTower, setRecentTower] = useState<RecentTower[]>([])
@@ -154,6 +171,9 @@ export default function DashboardPage() {
         <StatCard label="Sinyal Sedang" value={stats?.sinyalSedang ?? 0} icon={BarChart3} color="#eab308" delay={180} />
         <StatCard label="Sinyal Buruk" value={stats?.sinyalBuruk ?? 0} icon={BarChart3} color="#ef4444" delay={240} />
       </div>
+
+      {/* Pemdes: Completeness Card & Warnings */}
+      {isPemdes && stats && <DesaCompletenessCard stats={stats} />}
 
       {/* Interactive Map Section */}
       <DashboardMap />
@@ -259,5 +279,115 @@ export default function DashboardPage() {
         </Card>
       </div>
     </div>
+  )
+}
+
+function DesaCompletenessCard({ stats }: { stats: DashboardStats }) {
+  const hasTikor = stats.desaLatitude != null && stats.desaLongitude != null
+  const fields: Record<string, any> = stats.demografiFields || {}
+
+  let score = 0
+  if (hasTikor) score += 30
+
+  const demoFields = ['jumlahPenduduk', 'usiaProduktif', 'kepadatan', 'rataRataPenghasilan', 'mataPencaharianUtama'] as const
+  const filledCount = demoFields.filter(f => fields[f] != null && fields[f] !== '').length
+  score += filledCount * 8
+
+  if (stats.totalSinyal > 0) score += 15
+  if ((stats.towersNearby ?? 0) > 0) score += 15
+
+  let statusMessage = ''
+  let statusColor = ''
+  if (score < 50) {
+    statusMessage = 'Status data desa kurang lengkap. Harap melengkapi koordinat pusat desa dan metrik demografi untuk memastikan keakuratan analisis kewilayahan.'
+    statusColor = 'text-amber-700'
+  } else if (score < 85) {
+    statusMessage = 'Status data desa cukup lengkap. Melengkapi sisa data yang kosong disarankan untuk hasil analisis yang optimal.'
+    statusColor = 'text-blue-700'
+  } else {
+    statusMessage = 'Status data desa lengkap. Seluruh data utama telah terisi dan siap digunakan untuk analisis sistem.'
+    statusColor = 'text-green-700'
+  }
+
+  return (
+    <Card className="border-hairline shadow-soft animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both">
+      <CardHeader className="border-b border-hairline p-5 pb-4">
+        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+          <BarChart3 size={16} className="text-primary" />
+          Kelengkapan Profil Desa
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-5 space-y-4">
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">Kelengkapan Data</span>
+            <span className="font-bold text-foreground">{score}%</span>
+          </div>
+          <div className="w-full h-2.5 bg-[var(--color-canvas-soft)] rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-700 ease-out"
+              style={{
+                width: `${score}%`,
+                backgroundColor: score < 50 ? '#f59e0b' : score < 85 ? '#3b82f6' : '#22c55e',
+              }}
+            />
+          </div>
+          <p className={`text-xs ${statusColor}`}>{statusMessage}</p>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+          <div className={`p-2.5 rounded-lg border ${hasTikor ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'}`}>
+            <div className="flex items-center gap-1.5 mb-1">
+              <MapPin size={12} className={hasTikor ? 'text-green-600' : 'text-amber-600'} />
+              <span className="font-semibold">Koordinat</span>
+            </div>
+            <span className={hasTikor ? 'text-green-700' : 'text-amber-700'}>{hasTikor ? 'Terisi' : 'Belum diisi'}</span>
+          </div>
+          <div className={`p-2.5 rounded-lg border ${filledCount === 5 ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'}`}>
+            <div className="flex items-center gap-1.5 mb-1">
+              <Database size={12} className={filledCount === 5 ? 'text-green-600' : 'text-amber-600'} />
+              <span className="font-semibold">Demografi</span>
+            </div>
+            <span className={filledCount === 5 ? 'text-green-700' : 'text-amber-700'}>{filledCount}/5 terisi</span>
+          </div>
+          <div className={`p-2.5 rounded-lg border ${stats.totalSinyal > 0 ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'}`}>
+            <div className="flex items-center gap-1.5 mb-1">
+              <Signal size={12} className={stats.totalSinyal > 0 ? 'text-green-600' : 'text-amber-600'} />
+              <span className="font-semibold">Sinyal</span>
+            </div>
+            <span className={stats.totalSinyal > 0 ? 'text-green-700' : 'text-amber-700'}>{stats.totalSinyal > 0 ? `${stats.totalSinyal} titik` : 'Belum ada'}</span>
+          </div>
+          <div className={`p-2.5 rounded-lg border ${(stats.towersNearby ?? 0) > 0 ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'}`}>
+            <div className="flex items-center gap-1.5 mb-1">
+              <TowerControl size={12} className={(stats.towersNearby ?? 0) > 0 ? 'text-green-600' : 'text-amber-600'} />
+              <span className="font-semibold">Tower</span>
+            </div>
+            <span className={(stats.towersNearby ?? 0) > 0 ? 'text-green-700' : 'text-amber-700'}>
+              {(stats.towersNearby ?? 0) > 0 ? `${stats.towersNearby} terdekat` : 'Tidak ada'}
+            </span>
+          </div>
+        </div>
+
+        {!hasTikor && (
+          <div className="flex items-start gap-2.5 p-3 rounded-lg border border-amber-300 bg-amber-50">
+            <TriangleAlert size={15} className="text-amber-600 shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-800">
+              Koordinat pusat desa belum diisi. Harap lengkapi melalui menu Demografi untuk mengaktifkan
+              perhitungan jarak sinyal dan deteksi tower terdekat.
+            </p>
+          </div>
+        )}
+
+        {hasTikor && (stats.towersNearby ?? 0) === 0 && (
+          <div className="flex items-start gap-2.5 p-3 rounded-lg border border-blue-200 bg-blue-50">
+            <TowerControl size={15} className="text-blue-600 shrink-0 mt-0.5" />
+            <p className="text-xs text-blue-800">
+              Belum terdeteksi tower telekomunikasi aktif dalam radius 5 km dari pusat desa.
+              Pengajuan pembangunan tower baru disarankan melalui menu Tower.
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }

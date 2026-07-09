@@ -2,11 +2,22 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSession } from 'next-auth/react'
+import dynamic from 'next/dynamic'
 import {
   Users, Search, Building2, MapPin, Pencil, AlertCircle, ChevronLeft, ChevronRight,
-  ChevronDown, Check, X, Coins, HeartPulse, GraduationCap, Store, Briefcase, FileText
+  ChevronDown, Check, X, Coins, HeartPulse, GraduationCap, Store, Briefcase, FileText,
+  TriangleAlert
 } from 'lucide-react'
 import { toast } from 'sonner'
+
+const DesaDetailMap = dynamic(() => import('@/components/map/DesaDetailMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-[320px] rounded-xl border border-hairline bg-[var(--color-canvas-soft)] flex items-center justify-center">
+      <div className="w-5 h-5 border-2 border-hairline border-t-primary rounded-full animate-spin" />
+    </div>
+  ),
+})
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -269,6 +280,36 @@ export default function DemografiPage() {
       catatan: catatan.trim() || null,
       latitude: latitude ? parseFloat(latitude) : null,
       longitude: longitude ? parseFloat(longitude) : null,
+    }
+
+    if (payload.jumlahPenduduk != null && payload.jumlahPenduduk < 0) {
+      setFormError('Jumlah Penduduk tidak boleh bernilai negatif.')
+      setSubmitting(false)
+      return
+    }
+    if (payload.usiaProduktif != null && payload.usiaProduktif < 0) {
+      setFormError('Usia Produktif tidak boleh bernilai negatif.')
+      setSubmitting(false)
+      return
+    }
+    if (payload.kepadatan != null && payload.kepadatan < 0) {
+      setFormError('Kepadatan Penduduk tidak boleh bernilai negatif.')
+      setSubmitting(false)
+      return
+    }
+    if (payload.rataRataPenghasilan != null && payload.rataRataPenghasilan < 0) {
+      setFormError('Rata-rata Penghasilan tidak boleh bernilai negatif.')
+      setSubmitting(false)
+      return
+    }
+    if (
+      payload.jumlahPenduduk != null &&
+      payload.usiaProduktif != null &&
+      payload.usiaProduktif > payload.jumlahPenduduk
+    ) {
+      setFormError('Usia Produktif tidak boleh melebihi Jumlah Penduduk.')
+      setSubmitting(false)
+      return
     }
 
     try {
@@ -707,6 +748,9 @@ export default function DemografiPage() {
                     onChange={(e) => setLongitude(e.target.value)}
                   />
                 </div>
+                <p className="col-span-2 text-[10px] text-muted-foreground">
+                  Gunakan titik kantor desa atau pusat keramaian sebagai acuan perhitungan jarak sinyal.
+                </p>
               </div>
 
               {/* Basic Metrics */}
@@ -715,10 +759,12 @@ export default function DemografiPage() {
                 <Input
                   id="edit-penduduk"
                   type="number"
-                  placeholder="Jumlah penduduk"
+                  min="0"
+                  placeholder="Contoh: 3500"
                   value={jumlahPenduduk}
                   onChange={(e) => setJumlahPenduduk(e.target.value)}
                 />
+                <p className="text-[10px] text-muted-foreground">Total jiwa yang berdomisili di desa.</p>
               </div>
 
               <div className="space-y-1.5">
@@ -726,10 +772,12 @@ export default function DemografiPage() {
                 <Input
                   id="edit-produktif"
                   type="number"
-                  placeholder="Usia 15-64 tahun"
+                  min="0"
+                  placeholder="Contoh: 2100"
                   value={usiaProduktif}
                   onChange={(e) => setUsiaProduktif(e.target.value)}
                 />
+                <p className="text-[10px] text-muted-foreground">Jumlah penduduk usia kerja 15–64 tahun. Tidak boleh melebihi jumlah penduduk.</p>
               </div>
 
               <div className="space-y-1.5">
@@ -738,10 +786,12 @@ export default function DemografiPage() {
                   id="edit-kepadatan"
                   type="number"
                   step="any"
-                  placeholder="Rasio kepadatan"
+                  min="0"
+                  placeholder="Contoh: 145.5"
                   value={kepadatan}
                   onChange={(e) => setKepadatan(e.target.value)}
                 />
+                <p className="text-[10px] text-muted-foreground">Rerata kepadatan penduduk per kilometer persegi.</p>
               </div>
 
               <div className="space-y-1.5">
@@ -749,20 +799,23 @@ export default function DemografiPage() {
                 <Input
                   id="edit-penghasilan"
                   type="number"
-                  placeholder="Rerata pendapatan warga"
+                  min="0"
+                  placeholder="Contoh: 2500000"
                   value={rataRataPenghasilan}
                   onChange={(e) => setRataRataPenghasilan(e.target.value)}
                 />
+                <p className="text-[10px] text-muted-foreground">Rerata penghasilan per kepala keluarga per bulan dalam Rupiah.</p>
               </div>
 
               <div className="space-y-1.5 col-span-2">
                 <Label htmlFor="edit-pencaharian">Mata Pencaharian Utama</Label>
                 <Input
                   id="edit-pencaharian"
-                  placeholder="Contoh: Petani Karet, Tambang Batubara, dll"
+                  placeholder="Contoh: Petani Karet, Pekebun Sawit"
                   value={mataPencaharianUtama}
                   onChange={(e) => setMataPencaharianUtama(e.target.value)}
                 />
+                <p className="text-[10px] text-muted-foreground">Pekerjaan mayoritas penduduk desa.</p>
               </div>
 
               {/* Facilities / Infrastructure Checkboxes */}
@@ -882,6 +935,30 @@ export default function DemografiPage() {
             )}
           </div>
         </div>
+
+        {/* Tikor Warning Banner */}
+        {(desa.latitude == null || desa.longitude == null) && (
+          <div className="flex items-start gap-3 p-4 rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
+            <TriangleAlert size={18} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                Koordinat pusat desa belum diisi
+              </p>
+              <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                Harap segera perbarui koordinat lokasi desa melalui tombol "Edit Data Demografi" untuk
+                mengaktifkan perhitungan jarak sinyal dan deteksi tower terdekat.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Peta Desa */}
+        <DesaDetailMap
+          desaId={desa.id}
+          desaNama={desa.nama}
+          latitude={desa.latitude}
+          longitude={desa.longitude}
+        />
 
         {/* Metrik Utama Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

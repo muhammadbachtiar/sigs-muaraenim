@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
 import {
   TowerControl, Plus, Search, MapPin, Pencil, CheckCircle2, AlertCircle,
@@ -78,6 +78,16 @@ type DesaOption = {
   kecamatanId: string
 }
 
+type TowerMapForDuplicate = { id: string; namaTower: string; latitude: number; longitude: number }
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLng = (lng2 - lng1) * Math.PI / 180
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
 export default function TowerPage() {
   const { data: session, status } = useSession()
   const user = session?.user as any
@@ -110,6 +120,7 @@ export default function TowerPage() {
   const [allOperators, setAllOperators] = useState<SelectOption[]>([])
   const [allTeknologi, setAllTeknologi] = useState<SelectOption[]>([])
   const [allMedia, setAllMedia] = useState<SelectOption[]>([])
+  const [allTowersForDuplicate, setAllTowersForDuplicate] = useState<TowerMapForDuplicate[]>([])
   const [formDesasLoading, setFormDesasLoading] = useState(false)
 
   // --- MODAL CONTROLS ---
@@ -153,6 +164,22 @@ export default function TowerPage() {
 
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const formLatNum = formLat ? parseFloat(formLat) : null
+  const formLngNum = formLng ? parseFloat(formLng) : null
+
+  const nearbyDuplicate = useMemo(() => {
+    if (formLatNum == null || formLngNum == null || isNaN(formLatNum) || isNaN(formLngNum)) return null
+    const editingId = activeTower?.id
+    for (const t of allTowersForDuplicate) {
+      if (t.id === editingId) continue
+      const dist = haversineKm(formLatNum, formLngNum, t.latitude, t.longitude)
+      if (dist < 0.5) return { tower: t, distance: Math.round(dist * 1000) }
+    }
+    return null
+  }, [formLatNum, formLngNum, allTowersForDuplicate, activeTower])
+
+  const photoCountWarning = !activeTower && formPhotos.length < 2
+
   // --- FETCH MASTER DATA ON MOUNT ---
   useEffect(() => {
     if (status === 'authenticated') {
@@ -178,6 +205,11 @@ export default function TowerPage() {
       fetch('/api/master/media?is_select=true')
         .then(r => r.json())
         .then(res => { if (res.success) setAllMedia(res.data) })
+        .catch(err => console.error(err))
+
+      fetch('/api/tower?for_map=true')
+        .then(r => r.json())
+        .then(res => { if (res.success) setAllTowersForDuplicate(res.data) })
         .catch(err => console.error(err))
     }
   }, [status])
@@ -1270,6 +1302,7 @@ export default function TowerPage() {
                   value={formLat}
                   onChange={(e) => setFormLat(e.target.value)}
                 />
+                <p className="text-[10px] text-muted-foreground">Garis lintang lokasi tower. Gunakan GPS atau Google Maps.</p>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="form-lng">Longitude <span className="text-destructive">*</span></Label>
@@ -1281,8 +1314,20 @@ export default function TowerPage() {
                   value={formLng}
                   onChange={(e) => setFormLng(e.target.value)}
                 />
+                <p className="text-[10px] text-muted-foreground">Garis bujur lokasi tower. Gunakan GPS atau Google Maps.</p>
               </div>
             </div>
+
+            {/* Duplicate Tower Warning */}
+            {nearbyDuplicate && (
+              <div className="flex items-start gap-2 p-2.5 rounded-lg border border-amber-300 bg-amber-50 text-xs text-amber-800">
+                <AlertTriangle size={14} className="shrink-0 mt-0.5 text-amber-600" />
+                <p>
+                  Terdapat tower lain di dekat lokasi ini: <strong>{nearbyDuplicate.tower.namaTower}</strong> (jarak {nearbyDuplicate.distance} meter).
+                  Periksa kembali koordinat untuk menghindari pengajuan ganda.
+                </p>
+              </div>
+            )}
 
             {/* Deskripsi Lokasi */}
             <div className="space-y-1.5">
@@ -1434,6 +1479,14 @@ export default function TowerPage() {
                 </div>
               )}
             </div>
+
+            {/* Photo Count Warning */}
+            {photoCountWarning && (
+              <div className="flex items-start gap-2 p-2.5 rounded-lg border border-blue-200 bg-blue-50 text-xs text-blue-800">
+                <Camera size={14} className="shrink-0 mt-0.5 text-blue-500" />
+                <p>Lampirkan minimal 2 foto fisik tower (tampak depan dan tampak samping) untuk mempermudah proses verifikasi data.</p>
+              </div>
+            )}
 
             {formError && <p className="text-xs text-destructive font-medium">{formError}</p>}
 
