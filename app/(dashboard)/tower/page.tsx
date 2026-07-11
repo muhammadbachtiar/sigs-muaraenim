@@ -818,6 +818,17 @@ export default function TowerPage() {
         <TowerMap
           filterKecId={filterKecId}
           filterDesaId={filterDesaId}
+          kecamatanList={allKecamatans}
+          desaList={filterDesas}
+          onSelectKecamatan={(id) => {
+            setFilterKecId(id)
+            setFilterDesaId('')
+            setPage(1)
+          }}
+          onSelectDesa={(id) => {
+            setFilterDesaId(id)
+            setPage(1)
+          }}
           onSelectDetail={(id) => {
             const found = towers.find(t => t.id === id)
             if (found) openDetailModal(found)

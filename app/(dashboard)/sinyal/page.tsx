@@ -468,6 +468,15 @@ export default function SinyalPage() {
           kecamatanList={kecamatanList}
           userRole={userRole}
           userDesaId={userDesaId}
+          onSelectKecamatan={(id) => {
+            setSelectedKecamatan(id)
+            setSelectedDesa('')
+            setPage(1)
+          }}
+          onSelectDesa={(id) => {
+            setSelectedDesa(id)
+            setPage(1)
+          }}
           onSelectDetail={(id) => {
             const found = items.find(i => i.id === id)
             if (found) openDetail(found)

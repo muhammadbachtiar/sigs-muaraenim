@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import LeafletMapBase from './LeafletMapBase'
 import SinyalMarkers, { type SinyalMapItem } from './SinyalMarkers'
 import MapLegend from './MapLegend'
+import MapBoundary from './MapBoundary'
 import { Signal, Loader2, Info } from 'lucide-react'
 
 type Props = {
@@ -12,6 +13,10 @@ type Props = {
   selectedOperators?: string[]
   tanggalDari?: string
   tanggalSampai?: string
+  kecamatanList?: Array<{ id: string; nama: string }>
+  desaList?: Array<{ id: string; nama: string }>
+  onSelectKecamatan?: (id: string) => void
+  onSelectDesa?: (id: string) => void
 }
 
 export default function PublicSinyalMap({
@@ -20,10 +25,18 @@ export default function PublicSinyalMap({
   selectedOperators = [],
   tanggalDari = '',
   tanggalSampai = '',
+  kecamatanList = [],
+  desaList = [],
+  onSelectKecamatan,
+  onSelectDesa,
 }: Props) {
   const [data, setData] = useState<SinyalMapItem[]>([])
   const [loading, setLoading] = useState(false)
   const [searched, setSearched] = useState(false)
+
+  // Find names for GeoJSON bounds matching
+  const selectedKecamatanNama = kecamatanList.find((k) => k.id === selectedKecamatanId)?.nama
+  const selectedDesaNama = desaList.find((d) => d.id === selectedDesaId)?.nama
 
   const buildParams = useCallback(() => {
     const p = new URLSearchParams()
@@ -91,6 +104,14 @@ export default function PublicSinyalMap({
       )}
 
       <LeafletMapBase height="calc(100vh - 150px)">
+        <MapBoundary
+          selectedKecamatanNama={selectedKecamatanNama}
+          selectedDesaNama={selectedDesaNama}
+          kecamatanList={kecamatanList}
+          desaList={desaList}
+          onSelectKecamatan={onSelectKecamatan}
+          onSelectDesa={onSelectDesa}
+        />
         <SinyalMarkers items={data} />
         <MapLegend showSinyal={true} showTower={false} />
       </LeafletMapBase>
@@ -105,3 +126,4 @@ export default function PublicSinyalMap({
     </div>
   )
 }
+

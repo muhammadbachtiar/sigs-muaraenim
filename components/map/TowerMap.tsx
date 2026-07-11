@@ -4,17 +4,34 @@ import React, { useState, useEffect, useCallback } from 'react'
 import LeafletMapBase from './LeafletMapBase'
 import TowerMarkers, { type TowerMapItem } from './TowerMarkers'
 import MapLegend from './MapLegend'
+import MapBoundary from './MapBoundary'
 import { Loader2 } from 'lucide-react'
 
 type Props = {
   filterKecId?: string
   filterDesaId?: string
   onSelectDetail?: (id: string) => void
+  kecamatanList?: Array<{ id: string; nama: string }>
+  desaList?: Array<{ id: string; nama: string }>
+  onSelectKecamatan?: (id: string) => void
+  onSelectDesa?: (id: string) => void
 }
 
-export default function TowerMap({ filterKecId = '', filterDesaId = '', onSelectDetail }: Props) {
+export default function TowerMap({
+  filterKecId = '',
+  filterDesaId = '',
+  onSelectDetail,
+  kecamatanList = [],
+  desaList = [],
+  onSelectKecamatan,
+  onSelectDesa,
+}: Props) {
   const [data, setData] = useState<TowerMapItem[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Find names for GeoJSON bounds matching
+  const selectedKecamatanNama = kecamatanList.find((k) => k.id === filterKecId)?.nama
+  const selectedDesaNama = desaList.find((d) => d.id === filterDesaId)?.nama
 
   const buildParams = useCallback(() => {
     const p = new URLSearchParams({ for_map: 'true' })
@@ -53,6 +70,14 @@ export default function TowerMap({ filterKecId = '', filterDesaId = '', onSelect
       )}
 
       <LeafletMapBase height="calc(100vh - 280px)">
+        <MapBoundary
+          selectedKecamatanNama={selectedKecamatanNama}
+          selectedDesaNama={selectedDesaNama}
+          kecamatanList={kecamatanList}
+          desaList={desaList}
+          onSelectKecamatan={onSelectKecamatan}
+          onSelectDesa={onSelectDesa}
+        />
         <TowerMarkers items={data} onSelectDetail={onSelectDetail} />
         <MapLegend showSinyal={false} showTower={true} />
       </LeafletMapBase>
@@ -65,3 +90,4 @@ export default function TowerMap({ filterKecId = '', filterDesaId = '', onSelect
     </div>
   )
 }
+

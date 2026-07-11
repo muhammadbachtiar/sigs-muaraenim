@@ -221,6 +221,13 @@ export default function PetaPublikPage() {
         selectedOperators={selectedOperators}
         tanggalDari={tanggalDari}
         tanggalSampai={tanggalSampai}
+        kecamatanList={kecamatanList}
+        desaList={desaList}
+        onSelectKecamatan={(id) => {
+          setSelectedKecamatan(id)
+          setSelectedDesa('')
+        }}
+        onSelectDesa={setSelectedDesa}
       />
     </div>
   )

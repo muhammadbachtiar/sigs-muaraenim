@@ -7,10 +7,10 @@ import MapLegend from './MapLegend'
 import IdwMarker, { type IdwPredictionPoint } from './IdwMarker'
 import IdwGridLayer from './IdwGridLayer'
 import IdwPanel from './IdwPanel'
+import MapBoundary from './MapBoundary'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { IdwGridCell } from '@/lib/idw'
-
 type Props = {
   selectedOperators?: string[]
   selectedTeknologi?: string[]
@@ -19,6 +19,8 @@ type Props = {
   tanggalDari?: string
   tanggalSampai?: string
   onSelectDetail?: (id: string) => void
+  onSelectKecamatan?: (id: string) => void
+  onSelectDesa?: (id: string) => void
   // IDW Mode Props
   idwMode?: boolean
   desaList?: Array<{ id: string; nama: string }>
@@ -35,6 +37,8 @@ export default function SinyalMap({
   tanggalDari = '',
   tanggalSampai = '',
   onSelectDetail,
+  onSelectKecamatan,
+  onSelectDesa,
   idwMode = false,
   desaList = [],
   kecamatanList = [],
@@ -43,6 +47,10 @@ export default function SinyalMap({
 }: Props) {
   const [data, setData] = useState<SinyalMapItem[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Find names for GeoJSON bounds matching
+  const selectedKecamatanNama = kecamatanList.find((k) => k.id === selectedKecamatan)?.nama
+  const selectedDesaNama = desaList.find((d) => d.id === selectedDesa)?.nama
 
   // IDW state
   const [idwPrediction, setIdwPrediction] = useState<IdwPredictionPoint | null>(null)
@@ -127,6 +135,14 @@ export default function SinyalMap({
 
       {/* Kursor crosshair saat mode IDW aktif */}
       <LeafletMapBase height="calc(100vh - 280px)">
+        <MapBoundary
+          selectedKecamatanNama={selectedKecamatanNama}
+          selectedDesaNama={selectedDesaNama}
+          kecamatanList={kecamatanList}
+          desaList={desaList}
+          onSelectKecamatan={onSelectKecamatan}
+          onSelectDesa={onSelectDesa}
+        />
         <SinyalMarkers items={data} onSelectDetail={onSelectDetail} />
         <MapLegend showSinyal={true} showTower={false} />
 

@@ -5,6 +5,7 @@ import LeafletMapBase from './LeafletMapBase'
 import SinyalMarkers, { type SinyalMapItem } from './SinyalMarkers'
 import TowerMarkers, { type TowerMapItem } from './TowerMarkers'
 import MapLegend from './MapLegend'
+import MapBoundary from './MapBoundary'
 import { Signal, TowerControl, Layers, Loader2 } from 'lucide-react'
 
 type ViewMode = 'BOTH' | 'SINYAL' | 'TOWER'
@@ -113,6 +114,7 @@ export default function DashboardMap({ onSelectSinyalDetail, onSelectTowerDetail
         )}
 
         <LeafletMapBase height="360px">
+          <MapBoundary />
           {showSinyal && <SinyalMarkers items={sinyalData} onSelectDetail={onSelectSinyalDetail} />}
           {showTower && <TowerMarkers items={towerData} onSelectDetail={onSelectTowerDetail} />}
           <MapLegend showSinyal={showSinyal} showTower={showTower} />
