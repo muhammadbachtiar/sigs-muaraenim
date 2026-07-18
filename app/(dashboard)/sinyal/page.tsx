@@ -16,6 +16,7 @@ import SinyalDetailDialog, { type SinyalDetail } from '@/components/dashboard/Si
 import { toast } from 'sonner'
 import { PAGE_SIZE_OPTIONS } from '@/lib/constants'
 import dynamic from 'next/dynamic'
+import SearchableSelect from '@/components/ui/searchable-select'
 
 const SinyalMap = dynamic(() => import('@/components/map/SinyalMap'), {
   ssr: false,
@@ -356,25 +357,24 @@ export default function SinyalPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs text-muted-foreground mb-1 block">Kecamatan</label>
-                    <select
+                    <SearchableSelect
+                      options={kecamatanList.map(k => ({ value: k.id, label: k.nama }))}
                       value={selectedKecamatan}
-                      onChange={e => { setSelectedKecamatan(e.target.value); setSelectedDesa(''); setPage(1) }}
-                      className="w-full text-sm px-3 py-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-surface)] outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
-                    >
-                      <option value="">Semua Kecamatan</option>
-                      {kecamatanList.map(k => <option key={k.id} value={k.id}>{k.nama}</option>)}
-                    </select>
+                      onChange={val => { setSelectedKecamatan(val); setSelectedDesa(''); setPage(1) }}
+                      placeholder="Semua Kecamatan"
+                      searchPlaceholder="Cari kecamatan..."
+                    />
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground mb-1 block">Desa/Kelurahan</label>
-                    <select
+                    <SearchableSelect
+                      options={filteredDesa.map(d => ({ value: d.id, label: d.nama }))}
                       value={selectedDesa}
-                      onChange={e => { setSelectedDesa(e.target.value); setPage(1) }}
-                      className="w-full text-sm px-3 py-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-surface)] outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
-                    >
-                      <option value="">Semua Desa</option>
-                      {filteredDesa.map(d => <option key={d.id} value={d.id}>{d.nama}</option>)}
-                    </select>
+                      onChange={val => { setSelectedDesa(val); setPage(1) }}
+                      placeholder="Semua Desa"
+                      searchPlaceholder="Cari desa..."
+                      disabled={!selectedKecamatan}
+                    />
                   </div>
                 </div>
               )}

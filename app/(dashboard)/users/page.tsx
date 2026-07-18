@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import SearchableSelect from '@/components/ui/searchable-select'
 
 type UserItem = {
   id: string
@@ -672,38 +673,31 @@ export default function UserManagementPage() {
 
               <div className="space-y-1.5">
                 <Label htmlFor="add-kec">Pilih Kecamatan <span className="text-destructive">*</span></Label>
-                <select
+                <SearchableSelect
                   id="add-kec"
+                  options={allKecamatans.map(k => ({ value: k.id, label: k.nama }))}
                   value={selectedKecId}
-                  onChange={(e) => {
-                    const kecId = e.target.value
-                    setSelectedKecId(kecId)
+                  onChange={(val) => {
+                    setSelectedKecId(val)
                     setSelectedDesaId('')
-                    fetchDesasForKecamatan(kecId)
+                    fetchDesasForKecamatan(val)
                   }}
-                  className="flex h-9 w-full rounded-md border border-hairline bg-[var(--color-surface)] px-3 py-1.5 text-sm shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary"
-                >
-                  <option value="">-- Pilih Kecamatan --</option>
-                  {allKecamatans.map(k => (
-                    <option key={k.id} value={k.id}>{k.nama}</option>
-                  ))}
-                </select>
+                  placeholder="-- Pilih Kecamatan --"
+                  searchPlaceholder="Cari kecamatan..."
+                />
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="add-desa">Pilih Desa/Kelurahan <span className="text-destructive">*</span></Label>
-                <select
+                <SearchableSelect
                   id="add-desa"
-                  disabled={!selectedKecId || desasLoading}
+                  options={filteredDesas.map(d => ({ value: d.id, label: d.nama }))}
                   value={selectedDesaId}
-                  onChange={(e) => setSelectedDesaId(e.target.value)}
-                  className="flex h-9 w-full rounded-md border border-hairline bg-[var(--color-surface)] px-3 py-1.5 text-sm shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <option value="">{desasLoading ? 'Memuat desa...' : '-- Pilih Desa/Kelurahan --'}</option>
-                  {filteredDesas.map(d => (
-                    <option key={d.id} value={d.id}>{d.nama}</option>
-                  ))}
-                </select>
+                  onChange={setSelectedDesaId}
+                  placeholder={desasLoading ? 'Memuat desa...' : '-- Pilih Desa/Kelurahan --'}
+                  searchPlaceholder="Cari desa..."
+                  disabled={!selectedKecId || desasLoading}
+                />
               </div>
             </div>
 
@@ -757,38 +751,31 @@ export default function UserManagementPage() {
 
               <div className="space-y-1.5">
                 <Label htmlFor="edit-kec">Pilih Kecamatan <span className="text-destructive">*</span></Label>
-                <select
+                <SearchableSelect
                   id="edit-kec"
+                  options={allKecamatans.map(k => ({ value: k.id, label: k.nama }))}
                   value={selectedKecId}
-                  onChange={(e) => {
-                    const kecId = e.target.value
-                    setSelectedKecId(kecId)
+                  onChange={(val) => {
+                    setSelectedKecId(val)
                     setSelectedDesaId('')
-                    fetchDesasForKecamatan(kecId)
+                    fetchDesasForKecamatan(val)
                   }}
-                  className="flex h-9 w-full rounded-md border border-hairline bg-[var(--color-surface)] px-3 py-1.5 text-sm shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary"
-                >
-                  <option value="">-- Pilih Kecamatan --</option>
-                  {allKecamatans.map(k => (
-                    <option key={k.id} value={k.id}>{k.nama}</option>
-                  ))}
-                </select>
+                  placeholder="-- Pilih Kecamatan --"
+                  searchPlaceholder="Cari kecamatan..."
+                />
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="edit-desa">Pilih Desa/Kelurahan <span className="text-destructive">*</span></Label>
-                <select
+                <SearchableSelect
                   id="edit-desa"
-                  disabled={!selectedKecId || desasLoading}
+                  options={filteredDesas.map(d => ({ value: d.id, label: d.nama }))}
                   value={selectedDesaId}
-                  onChange={(e) => setSelectedDesaId(e.target.value)}
-                  className="flex h-9 w-full rounded-md border border-hairline bg-[var(--color-surface)] px-3 py-1.5 text-sm shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary disabled:opacity-50"
-                >
-                  <option value="">{desasLoading ? 'Memuat desa...' : '-- Pilih Desa/Kelurahan --'}</option>
-                  {filteredDesas.map(d => (
-                    <option key={d.id} value={d.id}>{d.nama}</option>
-                  ))}
-                </select>
+                  onChange={setSelectedDesaId}
+                  placeholder={desasLoading ? 'Memuat desa...' : '-- Pilih Desa/Kelurahan --'}
+                  searchPlaceholder="Cari desa..."
+                  disabled={!selectedKecId || desasLoading}
+                />
               </div>
             </div>
 

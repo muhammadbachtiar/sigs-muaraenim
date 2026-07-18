@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import dynamic from 'next/dynamic'
 import {
-  Users, Search, Building2, MapPin, Pencil, AlertCircle, ChevronLeft, ChevronRight,
+  Users, Search, Building2, MapPin, Map, Pencil, AlertCircle, ChevronLeft, ChevronRight,
   ChevronDown, Check, X, Coins, HeartPulse, GraduationCap, Store, Briefcase, FileText,
   TriangleAlert
 } from 'lucide-react'
@@ -14,6 +14,15 @@ const DesaDetailMap = dynamic(() => import('@/components/map/DesaDetailMap'), {
   ssr: false,
   loading: () => (
     <div className="h-[320px] rounded-xl border border-hairline bg-[var(--color-canvas-soft)] flex items-center justify-center">
+      <div className="w-5 h-5 border-2 border-hairline border-t-primary rounded-full animate-spin" />
+    </div>
+  ),
+})
+
+const MapCoordinatePicker = dynamic(() => import('@/components/map/MapCoordinatePicker'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-[340px] rounded-xl border border-hairline bg-[var(--color-canvas-soft)] flex items-center justify-center">
       <div className="w-5 h-5 border-2 border-hairline border-t-primary rounded-full animate-spin" />
     </div>
   ),
@@ -133,6 +142,7 @@ export default function DemografiPage() {
 
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [showMapPickerModal, setShowMapPickerModal] = useState(false)
 
   // --- DETAIL MODAL STATE (Super Admin) ---
   const [detailModalOpen, setDetailModalOpen] = useState(false)
@@ -721,34 +731,60 @@ export default function DemografiPage() {
           <div className="space-y-4 py-2 text-sm">
             <div className="grid grid-cols-2 gap-4">
               {/* Coordinates Section */}
-              <div className="col-span-2 border border-hairline bg-[var(--color-canvas-soft)]/50 p-3 rounded-lg grid grid-cols-2 gap-3">
-                <h3 className="col-span-2 text-xs font-semibold text-foreground flex items-center gap-1.5">
-                  <MapPin size={13} className="text-primary" />
-                  Koordinat Lokasi Desa (Pusat Desa)
-                </h3>
-                <div className="space-y-1.5">
-                  <Label htmlFor="edit-lat">Latitude (Garis Lintang)</Label>
-                  <Input
-                    id="edit-lat"
-                    type="number"
-                    step="any"
-                    placeholder="Contoh: -3.6540"
-                    value={latitude}
-                    onChange={(e) => setLatitude(e.target.value)}
-                  />
+              <div className="col-span-2 border border-hairline bg-[var(--color-canvas-soft)]/50 p-3 rounded-lg space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                    <MapPin size={13} className="text-primary" />
+                    Koordinat Lokasi Desa (Pusat Desa)
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setShowMapPickerModal(prev => !prev)}
+                    className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+                  >
+                    <Map size={12} />
+                    {showMapPickerModal ? 'Tutup Peta' : 'Pilih dari Peta'}
+                  </button>
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="edit-lng">Longitude (Garis Bujur)</Label>
-                  <Input
-                    id="edit-lng"
-                    type="number"
-                    step="any"
-                    placeholder="Contoh: 103.8750"
-                    value={longitude}
-                    onChange={(e) => setLongitude(e.target.value)}
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="edit-lat">Latitude (Garis Lintang)</Label>
+                    <input
+                      id="edit-lat"
+                      type="number"
+                      step="any"
+                      placeholder="Contoh: -3.6540"
+                      value={latitude}
+                      onChange={(e) => setLatitude(e.target.value)}
+                      className="flex h-9 w-full rounded-md border border-hairline bg-[var(--color-surface)] px-3 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="edit-lng">Longitude (Garis Bujur)</Label>
+                    <input
+                      id="edit-lng"
+                      type="number"
+                      step="any"
+                      placeholder="Contoh: 103.8750"
+                      value={longitude}
+                      onChange={(e) => setLongitude(e.target.value)}
+                      className="flex h-9 w-full rounded-md border border-hairline bg-[var(--color-surface)] px-3 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+                    />
+                  </div>
                 </div>
-                <p className="col-span-2 text-[10px] text-muted-foreground">
+                {showMapPickerModal && (
+                  <MapCoordinatePicker
+                    latitude={latitude ? parseFloat(latitude) : null}
+                    longitude={longitude ? parseFloat(longitude) : null}
+                    onChange={(lat, lng) => {
+                      setLatitude(String(lat))
+                      setLongitude(String(lng))
+                    }}
+                    selectedDesaNama={activeDesaNama}
+                    userRole={isSuperAdmin ? 'SUPER_ADMIN' : 'PEMDES'}
+                  />
+                )}
+                <p className="text-[10px] text-muted-foreground">
                   Gunakan titik kantor desa atau pusat keramaian sebagai acuan perhitungan jarak sinyal.
                 </p>
               </div>

@@ -3,10 +3,10 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
 import {
-  TowerControl, Plus, Search, MapPin, Pencil, CheckCircle2, AlertCircle,
+  TowerControl, Plus, Search, MapPin, Map, Pencil, CheckCircle2, AlertCircle,
   XCircle, Clock, Eye, Trash2, Camera, Upload, Loader2, RefreshCw,
   ShieldCheck, ArrowUpRight, FileText, Check, X, Building, Radio, Wifi, Network,
-  ImageIcon, Sparkles, AlertTriangle, LayoutGrid, List, Map
+  ImageIcon, Sparkles, AlertTriangle, LayoutGrid, List
 } from 'lucide-react'
 import { toast } from 'sonner'
 import dynamic from 'next/dynamic'
@@ -20,6 +20,15 @@ const TowerMap = dynamic(() => import('@/components/map/TowerMap'), {
   ),
 })
 
+const MapCoordinatePicker = dynamic(() => import('@/components/map/MapCoordinatePicker'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-[340px] rounded-xl border border-hairline bg-[var(--color-surface)] flex items-center justify-center">
+      <Loader2 size={18} className="animate-spin text-muted-foreground" />
+    </div>
+  ),
+})
+
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -27,6 +36,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import SearchableSelect from '@/components/ui/searchable-select'
 
 // --- CONSTANTS ---
 
@@ -129,6 +139,7 @@ export default function TowerPage() {
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [showTowerMapPicker, setShowTowerMapPicker] = useState(false)
 
   // Target item for view/edit/verify/delete/upload
   const [activeTower, setActiveTower] = useState<TowerItem | null>(null)
@@ -735,29 +746,25 @@ export default function TowerPage() {
             </div>
 
             {/* Select Kecamatan */}
-            <select
+            <SearchableSelect
+              options={allKecamatans.map(k => ({ value: k.id, label: k.nama }))}
               value={filterKecId}
-              onChange={(e) => { setFilterKecId(e.target.value); setPage(1) }}
-              className="flex h-9 w-full sm:w-[170px] rounded-md border border-hairline bg-[var(--color-surface)] px-3 py-1 text-xs shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary"
-            >
-              <option value="">-- Semua Kecamatan --</option>
-              {allKecamatans.map(k => (
-                <option key={k.id} value={k.id}>{k.nama}</option>
-              ))}
-            </select>
+              onChange={(val) => { setFilterKecId(val); setFilterDesaId(''); setPage(1) }}
+              placeholder="-- Semua Kecamatan --"
+              searchPlaceholder="Cari kecamatan..."
+              className="h-9 text-xs w-full sm:w-[170px]"
+            />
 
             {/* Select Desa */}
-            <select
-              disabled={!filterKecId}
+            <SearchableSelect
+              options={filterDesas.map(d => ({ value: d.id, label: d.nama }))}
               value={filterDesaId}
-              onChange={(e) => { setFilterDesaId(e.target.value); setPage(1) }}
-              className="flex h-9 w-full sm:w-[170px] rounded-md border border-hairline bg-[var(--color-surface)] px-3 py-1 text-xs shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary disabled:opacity-50"
-            >
-              <option value="">-- Semua Desa --</option>
-              {filterDesas.map(d => (
-                <option key={d.id} value={d.id}>{d.nama}</option>
-              ))}
-            </select>
+              onChange={(val) => { setFilterDesaId(val); setPage(1) }}
+              placeholder="-- Semua Desa --"
+              searchPlaceholder="Cari desa..."
+              disabled={!filterKecId}
+              className="h-9 text-xs w-full sm:w-[170px]"
+            />
 
             {(filterKecId || filterDesaId || searchQuery || statusFilter !== 'ALL') && (
               <Button
@@ -1242,17 +1249,14 @@ export default function TowerPage() {
               {/* Static Select Ketinggian Tower */}
               <div className="space-y-1.5">
                 <Label htmlFor="form-tinggi">Ketinggian / Kategori Tower</Label>
-                <select
+                <SearchableSelect
                   id="form-tinggi"
+                  options={TOWER_HEIGHT_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
                   value={formTinggi}
-                  onChange={(e) => setFormTinggi(e.target.value)}
-                  className="flex h-9 w-full rounded-md border border-hairline bg-[var(--color-surface)] px-3 py-1.5 text-xs focus-visible:ring-1 focus-visible:ring-primary"
-                >
-                  <option value="">-- Pilih Kategori Ketinggian --</option>
-                  {TOWER_HEIGHT_OPTIONS.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
+                  onChange={setFormTinggi}
+                  placeholder="-- Pilih Kategori Ketinggian --"
+                  searchPlaceholder="Cari kategori..."
+                />
               </div>
             </div>
 
@@ -1265,68 +1269,93 @@ export default function TowerPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="form-kec">Kecamatan <span className="text-destructive">*</span></Label>
-                  <select
+                  <SearchableSelect
                     id="form-kec"
+                    options={allKecamatans.map(k => ({ value: k.id, label: k.nama }))}
                     value={formKecId}
-                    onChange={(e) => {
-                      const kecId = e.target.value
-                      setFormKecId(kecId)
+                    onChange={(val) => {
+                      setFormKecId(val)
                       setFormDesaId('')
-                      fetchFormDesas(kecId)
+                      fetchFormDesas(val)
                     }}
-                    className="flex h-9 w-full rounded-md border border-hairline bg-[var(--color-surface)] px-3 py-1.5 text-xs focus-visible:ring-1 focus-visible:ring-primary"
-                  >
-                    <option value="">-- Pilih Kecamatan --</option>
-                    {allKecamatans.map(k => (
-                      <option key={k.id} value={k.id}>{k.nama}</option>
-                    ))}
-                  </select>
+                    placeholder="-- Pilih Kecamatan --"
+                    searchPlaceholder="Cari kecamatan..."
+                  />
                 </div>
 
                 <div className="space-y-1.5">
                   <Label htmlFor="form-desa">Desa/Kelurahan</Label>
-                  <select
+                  <SearchableSelect
                     id="form-desa"
-                    disabled={!formKecId || formDesasLoading}
+                    options={formDesas.map(d => ({ value: d.id, label: d.nama }))}
                     value={formDesaId}
-                    onChange={(e) => setFormDesaId(e.target.value)}
-                    className="flex h-9 w-full rounded-md border border-hairline bg-[var(--color-surface)] px-3 py-1.5 text-xs focus-visible:ring-1 focus-visible:ring-primary disabled:opacity-50"
-                  >
-                    <option value="">{formDesasLoading ? 'Memuat desa...' : '-- Pilih Desa --'}</option>
-                    {formDesas.map(d => (
-                      <option key={d.id} value={d.id}>{d.nama}</option>
-                    ))}
-                  </select>
+                    onChange={setFormDesaId}
+                    placeholder={formDesasLoading ? 'Memuat desa...' : '-- Pilih Desa --'}
+                    searchPlaceholder="Cari desa..."
+                    disabled={!formKecId || formDesasLoading}
+                  />
                 </div>
               </div>
             </div>
 
             {/* Row 3: Latitude & Longitude */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="form-lat">Latitude <span className="text-destructive">*</span></Label>
-                <Input
-                  id="form-lat"
-                  type="number"
-                  step="any"
-                  placeholder="Contoh: -3.654321"
-                  value={formLat}
-                  onChange={(e) => setFormLat(e.target.value)}
-                />
-                <p className="text-[10px] text-muted-foreground">Garis lintang lokasi tower. Gunakan GPS atau Google Maps.</p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <MapPin size={13} className="text-primary" /> Koordinat Lokasi Tower
+                </h4>
+                <button
+                  type="button"
+                  onClick={() => setShowTowerMapPicker(prev => !prev)}
+                  className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+                >
+                  <Map size={12} />
+                  {showTowerMapPicker ? 'Tutup Peta' : 'Pilih dari Peta'}
+                </button>
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="form-lng">Longitude <span className="text-destructive">*</span></Label>
-                <Input
-                  id="form-lng"
-                  type="number"
-                  step="any"
-                  placeholder="Contoh: 103.789012"
-                  value={formLng}
-                  onChange={(e) => setFormLng(e.target.value)}
-                />
-                <p className="text-[10px] text-muted-foreground">Garis bujur lokasi tower. Gunakan GPS atau Google Maps.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="form-lat">Latitude <span className="text-destructive">*</span></Label>
+                  <Input
+                    id="form-lat"
+                    type="number"
+                    step="any"
+                    placeholder="Contoh: -3.654321"
+                    value={formLat}
+                    onChange={(e) => setFormLat(e.target.value)}
+                  />
+                  <p className="text-[10px] text-muted-foreground">Garis lintang lokasi tower. Gunakan GPS atau Google Maps.</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="form-lng">Longitude <span className="text-destructive">*</span></Label>
+                  <Input
+                    id="form-lng"
+                    type="number"
+                    step="any"
+                    placeholder="Contoh: 103.789012"
+                    value={formLng}
+                    onChange={(e) => setFormLng(e.target.value)}
+                  />
+                  <p className="text-[10px] text-muted-foreground">Garis bujur lokasi tower. Gunakan GPS atau Google Maps.</p>
+                </div>
               </div>
+              {showTowerMapPicker && (() => {
+                const selectedDesa = formDesas.find(d => d.id === formDesaId)
+                const selectedKec = allKecamatans.find(k => k.id === formKecId)
+                return (
+                  <MapCoordinatePicker
+                    latitude={formLatNum}
+                    longitude={formLngNum}
+                    onChange={(lat, lng) => {
+                      setFormLat(String(lat))
+                      setFormLng(String(lng))
+                    }}
+                    selectedDesaNama={selectedDesa?.nama}
+                    selectedKecamatanNama={selectedKec?.nama}
+                    userRole={isSuperAdmin ? 'SUPER_ADMIN' : 'PEMDES'}
+                  />
+                )
+              })()}
             </div>
 
             {/* Duplicate Tower Warning */}

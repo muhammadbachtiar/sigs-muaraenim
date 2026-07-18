@@ -1,13 +1,24 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { Loader2, MapPin, X, Camera, TriangleAlert, TowerControl } from 'lucide-react'
+import { Loader2, MapPin, Map, X, Camera, TriangleAlert, TowerControl } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
+import dynamic from 'next/dynamic'
+import SearchableSelect from '@/components/ui/searchable-select'
+
+const MapCoordinatePicker = dynamic(() => import('@/components/map/MapCoordinatePicker'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-[340px] rounded-xl border border-hairline bg-[var(--color-surface)] flex items-center justify-center">
+      <Loader2 size={18} className="animate-spin text-muted-foreground" />
+    </div>
+  ),
+})
 
 type Desa = { id: string; nama: string; latitude: number | null; longitude: number | null; kecamatan: { nama: string } }
 type Operator = { id: string; nama: string }
@@ -112,6 +123,7 @@ export default function SinyalFormDialog({ open, onClose, onSuccess, editData, u
   const [errors, setErrors] = useState<FormErrors>({})
   const [submitting, setSubmitting] = useState(false)
   const [gettingLocation, setGettingLocation] = useState(false)
+  const [showMapPicker, setShowMapPicker] = useState(false)
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const [uploadingPhotos, setUploadingPhotos] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -194,6 +206,19 @@ export default function SinyalFormDialog({ open, onClose, onSuccess, editData, u
   const setField = (key: keyof FormState, value: string) => {
     setForm(prev => ({ ...prev, [key]: value }))
     if (errors[key]) setErrors(prev => ({ ...prev, [key]: undefined }))
+  }
+
+  const handleMapPickerChange = (lat: number, lng: number) => {
+    setField('latitude', String(lat))
+    setField('longitude', String(lng))
+  }
+
+  const handleIdwRecommendation = (pred: { predictedRsrp: number | null; predictedRssi: number | null; predictedRsrq: number | null; predictedSnr: number | null }) => {
+    if (pred.predictedRsrp != null) setField('rsrp', String(Math.round(pred.predictedRsrp)))
+    if (pred.predictedRssi != null) setField('rssi', String(Math.round(pred.predictedRssi)))
+    if (pred.predictedRsrq != null) setField('rsrq', String(Math.round(pred.predictedRsrq)))
+    if (pred.predictedSnr != null) setField('snr', String(Math.round(pred.predictedSnr)))
+    toast.success('Nilai sinyal rekomendasi IDW telah diterapkan')
   }
 
   const handleGetLocation = () => {
@@ -311,17 +336,15 @@ export default function SinyalFormDialog({ open, onClose, onSuccess, editData, u
                   <span className="text-xs text-muted-foreground ml-1">(tetap)</span>
                 </div>
               ) : (
-                <select
-                  id="sf-desa"
-                  value={form.desaKelurahanId}
-                  onChange={e => setField('desaKelurahanId', e.target.value)}
-                  className="w-full text-sm px-3 py-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-surface)] outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:ring-offset-0"
-                >
-                  <option value="">— Pilih Desa/Kelurahan —</option>
-                  {desaList.map(d => (
-                    <option key={d.id} value={d.id}>{d.kecamatan.nama} / {d.nama}</option>
-                  ))}
-                </select>
+              <SearchableSelect
+                id="sf-desa"
+                options={desaList.map(d => ({ value: d.id, label: `${d.kecamatan.nama} / ${d.nama}` }))}
+                value={form.desaKelurahanId}
+                onChange={val => setField('desaKelurahanId', val)}
+                placeholder="— Pilih Desa/Kelurahan —"
+                searchPlaceholder="Cari desa atau kecamatan..."
+                emptyText="Desa tidak ditemukan"
+              />
               )}
               {errors.desaKelurahanId && <p className="text-xs text-red-500 mt-1">{errors.desaKelurahanId}</p>}
             </div>
@@ -330,28 +353,26 @@ export default function SinyalFormDialog({ open, onClose, onSuccess, editData, u
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label htmlFor="sf-operator" className="text-xs font-medium mb-1.5 block">Operator</Label>
-                <select
+                <SearchableSelect
                   id="sf-operator"
+                  options={operatorList.map(o => ({ value: o.id, label: o.nama }))}
                   value={form.operatorId}
-                  onChange={e => setField('operatorId', e.target.value)}
-                  className="w-full text-sm px-3 py-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-surface)] outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-                >
-                  <option value="">— Pilih —</option>
-                  {operatorList.map(o => <option key={o.id} value={o.id}>{o.nama}</option>)}
-                </select>
+                  onChange={val => setField('operatorId', val)}
+                  placeholder="— Pilih Operator —"
+                  searchPlaceholder="Cari operator..."
+                />
                 {errors.operatorId && <p className="text-xs text-red-500 mt-1">{errors.operatorId}</p>}
               </div>
               <div>
                 <Label htmlFor="sf-teknologi" className="text-xs font-medium mb-1.5 block">Teknologi</Label>
-                <select
+                <SearchableSelect
                   id="sf-teknologi"
+                  options={teknologiList.map(t => ({ value: t.id, label: t.nama }))}
                   value={form.teknologiId}
-                  onChange={e => setField('teknologiId', e.target.value)}
-                  className="w-full text-sm px-3 py-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-surface)] outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-                >
-                  <option value="">— Pilih —</option>
-                  {teknologiList.map(t => <option key={t.id} value={t.id}>{t.nama}</option>)}
-                </select>
+                  onChange={val => setField('teknologiId', val)}
+                  placeholder="— Pilih Teknologi —"
+                  searchPlaceholder="Cari teknologi..."
+                />
                 {errors.teknologiId && <p className="text-xs text-red-500 mt-1">{errors.teknologiId}</p>}
               </div>
             </div>
@@ -373,15 +394,26 @@ export default function SinyalFormDialog({ open, onClose, onSuccess, editData, u
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <Label className="text-xs font-medium">Koordinat</Label>
-                <button
-                  type="button"
-                  onClick={handleGetLocation}
-                  disabled={gettingLocation}
-                  className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline disabled:opacity-50"
-                >
-                  {gettingLocation ? <Loader2 size={12} className="animate-spin" /> : <MapPin size={12} />}
-                  Gunakan Lokasi Saya
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowMapPicker(prev => !prev)}
+                    className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline"
+                  >
+                    <Map size={12} />
+                    {showMapPicker ? 'Tutup Peta' : 'Pilih dari Peta'}
+                  </button>
+                  <span className="text-muted-foreground text-xs">|</span>
+                  <button
+                    type="button"
+                    onClick={handleGetLocation}
+                    disabled={gettingLocation}
+                    className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline disabled:opacity-50"
+                  >
+                    {gettingLocation ? <Loader2 size={12} className="animate-spin" /> : <MapPin size={12} />}
+                    Lokasi Saya
+                  </button>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -409,6 +441,20 @@ export default function SinyalFormDialog({ open, onClose, onSuccess, editData, u
                   {errors.longitude && <p className="text-xs text-red-500 mt-1">{errors.longitude}</p>}
                 </div>
               </div>
+              {showMapPicker && (
+                <div className="mt-3">
+                  <MapCoordinatePicker
+                    latitude={measLat}
+                    longitude={measLng}
+                    onChange={handleMapPickerChange}
+                    selectedDesaNama={selectedDesa?.nama}
+                    selectedKecamatanNama={selectedDesa?.kecamatan?.nama}
+                    userRole={userRole}
+                    showIdwRecommendation={true}
+                    onIdwRecommendation={handleIdwRecommendation}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Smart Warnings */}
