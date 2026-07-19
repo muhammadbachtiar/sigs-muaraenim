@@ -1,0 +1,26 @@
+{
+  "name": "SIGS Muara Enim",
+  "short_name": "SIGS",
+  "description": "Sistem Informasi Geografis Signal — Pemetaan sinyal seluler Kabupaten Muara Enim",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0075de",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/logo_muara_enim.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo_muara_enim.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["utilities", "government"],
+  "lang": "id"
+}

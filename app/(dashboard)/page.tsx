@@ -16,6 +16,8 @@ import {
   Loader2,
   TriangleAlert,
   MapPin,
+  Map,
+  FileText,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
@@ -161,6 +163,36 @@ export default function DashboardPage() {
         <p className="text-sm text-muted-foreground mt-1">
           Ringkasan cakupan sinyal & infrastruktur telekomunikasi Kabupaten Muara Enim
         </p>
+      </div>
+
+      {/* Shortcut Grid ala MyBCA */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: 'Input Sinyal', icon: Signal, href: '/sinyal?action=create', color: '#3b82f6', bg: '#eff6ff' },
+          { label: 'Ajukan Tower', icon: TowerControl, href: '/tower?action=create', color: '#14b8a6', bg: '#f0fdfa' },
+          { label: 'Daftar Draf', icon: FileText, href: '/draf', color: '#f59e0b', bg: '#fffbeb' },
+          { label: 'Peta Publik', icon: Map, href: '/peta', color: '#8b5cf6', bg: '#f5f3ff' },
+        ].map((s) => {
+          const Icon = s.icon
+          return (
+            <Link
+              key={s.label}
+              href={s.href}
+              className="flex items-center gap-3 px-4 py-3.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-surface)] hover:shadow-elevated transition-all group"
+            >
+              <div
+                className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-transform group-hover:scale-110"
+                style={{ backgroundColor: s.bg }}
+              >
+                <Icon size={18} color={s.color} />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground leading-tight">{s.label}</p>
+                <p className="text-[11px] text-muted-foreground">Buka menu</p>
+              </div>
+            </Link>
+          )
+        })}
       </div>
 
       {/* Stats Grid */}

@@ -15,6 +15,7 @@ import {
   X,
   ChevronRight,
   UserCog,
+  FileText,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
@@ -24,6 +25,7 @@ const navItems = [
   { href: '/tower', label: 'Manajemen Tower', icon: TowerControl },
   { href: '/master', label: 'Master Data', icon: Database },
   { href: '/demografi', label: 'Demografi Desa', icon: Users },
+  { href: '/draf', label: 'Draf Tersimpan', icon: FileText },
   { href: '/users', label: 'Manajemen User', icon: UserCog },
   { href: '/peta', label: 'Peta Publik', icon: Map, external: true },
 ]

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import {
   Signal, Plus, X, Download, ChevronLeft, ChevronRight,
@@ -81,6 +82,15 @@ export default function SinyalPage() {
   const [detailData, setDetailData] = useState<SinyalDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  // Auto-open form dari shortcut (?action=create)
+  const searchParams = useSearchParams()
+  useEffect(() => {
+    if (searchParams.get('action') === 'create') {
+      setEditData(null)
+      setFormOpen(true)
+    }
+  }, [searchParams])
 
   // Stats computed from current page + total
   const statsFromItems = {
