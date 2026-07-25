@@ -124,9 +124,11 @@ export default function SinyalFormDialog({ open, onClose, onSuccess, editData, u
   const [submitting, setSubmitting] = useState(false)
   const [gettingLocation, setGettingLocation] = useState(false)
   const [showMapPicker, setShowMapPicker] = useState(false)
+  const [coordMode, setCoordMode] = useState<'none' | 'map' | 'manual'>('none')
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const [uploadingPhotos, setUploadingPhotos] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
 
   const isEdit = !!editData
 
@@ -134,7 +136,7 @@ export default function SinyalFormDialog({ open, onClose, onSuccess, editData, u
     if (!open) return
     setLoadingOptions(true)
     Promise.all([
-      fetch('/api/master/desa?page_size=200').then(r => r.json()),
+      fetch('/api/master/desa?is_select=true').then(r => r.json()),
       fetch('/api/master/operator?page_size=50').then(r => r.json()),
       fetch('/api/master/teknologi?page_size=50').then(r => r.json()),
       fetch('/api/tower?for_map=true').then(r => r.json()),
@@ -145,6 +147,15 @@ export default function SinyalFormDialog({ open, onClose, onSuccess, editData, u
       if (towers.success) setTowerList(towers.data)
     }).finally(() => setLoadingOptions(false))
   }, [open])
+
+  // Isu 9: Fix race condition — jika PEMDES dan desa belum ter-select karena loading,
+  // set setelah desaList berhasil dimuat
+  useEffect(() => {
+    if (userRole === 'PEMDES' && userDesaId && desaList.length > 0 && !form.desaKelurahanId) {
+      setField('desaKelurahanId', userDesaId)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [desaList])
 
   // Auto-suggest teknologi when operator is selected
   useEffect(() => {
@@ -331,20 +342,20 @@ export default function SinyalFormDialog({ open, onClose, onSuccess, editData, u
             <div>
               <Label htmlFor="sf-desa" className="text-xs font-medium mb-1.5 block">Desa / Kelurahan</Label>
               {userRole === 'PEMDES' && userDesaId ? (
-                <div className="text-sm px-3 py-2 rounded-lg bg-[var(--color-canvas-soft)] border border-[var(--color-hairline)] text-[var(--color-ink-secondary)]">
-                  {desaList.find(d => d.id === userDesaId)?.nama ?? 'Desa Anda'}
-                  <span className="text-xs text-muted-foreground ml-1">(tetap)</span>
+                <div className="text-sm px-3 py-2 rounded-lg bg-[var(--color-canvas-soft)] border border-[var(--color-hairline)] text-[var(--color-ink-secondary)] font-medium">
+                  {selectedDesa?.nama ? `Desa/Kel. ${selectedDesa.nama}` : 'Desa Anda'}
+                  <span className="text-xs text-muted-foreground ml-1 font-normal">(tetap)</span>
                 </div>
               ) : (
-              <SearchableSelect
-                id="sf-desa"
-                options={desaList.map(d => ({ value: d.id, label: `${d.kecamatan.nama} / ${d.nama}` }))}
-                value={form.desaKelurahanId}
-                onChange={val => setField('desaKelurahanId', val)}
-                placeholder="— Pilih Desa/Kelurahan —"
-                searchPlaceholder="Cari desa atau kecamatan..."
-                emptyText="Desa tidak ditemukan"
-              />
+                <SearchableSelect
+                  id="sf-desa"
+                  options={desaList.map(d => ({ value: d.id, label: `${d.kecamatan.nama} / ${d.nama}` }))}
+                  value={form.desaKelurahanId}
+                  onChange={val => setField('desaKelurahanId', val)}
+                  placeholder="— Pilih Desa/Kelurahan —"
+                  searchPlaceholder="Cari desa atau kecamatan..."
+                  emptyText="Desa tidak ditemukan"
+                />
               )}
               {errors.desaKelurahanId && <p className="text-xs text-red-500 mt-1">{errors.desaKelurahanId}</p>}
             </div>
@@ -390,59 +401,104 @@ export default function SinyalFormDialog({ open, onClose, onSuccess, editData, u
               {errors.tanggalPengukuran && <p className="text-xs text-red-500 mt-1">{errors.tanggalPengukuran}</p>}
             </div>
 
-            {/* Koordinat */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <Label className="text-xs font-medium">Koordinat</Label>
+            {/* Section: Koordinat — Form Manual Selalu Tampil & Sincronize */}
+            <div className="space-y-3 border border-[var(--color-hairline)] p-3 rounded-xl bg-[var(--color-surface)]">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <MapPin size={13} className="text-primary" /> Koordinat Lokasi
+                </Label>
+
+                {/* Buttons: Lokasi Saya (GPS) & Pilih dari Peta */}
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowMapPicker(prev => !prev)}
-                    className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline"
-                  >
-                    <Map size={12} />
-                    {showMapPicker ? 'Tutup Peta' : 'Pilih dari Peta'}
-                  </button>
-                  <span className="text-muted-foreground text-xs">|</span>
                   <button
                     type="button"
                     onClick={handleGetLocation}
                     disabled={gettingLocation}
-                    className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline disabled:opacity-50"
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-emerald-500/30 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-xs font-semibold transition-all disabled:opacity-50"
                   >
                     {gettingLocation ? <Loader2 size={12} className="animate-spin" /> : <MapPin size={12} />}
                     Lokasi Saya
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowMapPicker(prev => !prev)}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-semibold transition-all ${showMapPicker
+                        ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-xs'
+                        : 'border-blue-500/30 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                      }`}
+                  >
+                    <Map size={12} />
+                    {showMapPicker ? 'Sembunyikan Peta' : 'Pilih dari Peta'}
+                  </button>
                 </div>
               </div>
+
+              {/* Form Tulis Manual — SELALU DITAMPILKAN */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
+                  <Label htmlFor="sf-lat" className="text-[11px] text-muted-foreground block mb-1">
+                    Latitude (Lintang) <span className="text-red-500">*</span>
+                  </Label>
                   <Input
                     id="sf-lat"
                     type="number"
                     step="any"
-                    placeholder="Latitude (-90 ~ 90)"
+                    placeholder="-3.654321"
                     value={form.latitude}
                     onChange={e => setField('latitude', e.target.value)}
-                    className="text-sm"
+                    className="text-xs font-mono"
                   />
                   {errors.latitude && <p className="text-xs text-red-500 mt-1">{errors.latitude}</p>}
                 </div>
                 <div>
+                  <Label htmlFor="sf-lng" className="text-[11px] text-muted-foreground block mb-1">
+                    Longitude (Bujur) <span className="text-red-500">*</span>
+                  </Label>
                   <Input
                     id="sf-lng"
                     type="number"
                     step="any"
-                    placeholder="Longitude (-180 ~ 180)"
+                    placeholder="103.789012"
                     value={form.longitude}
                     onChange={e => setField('longitude', e.target.value)}
-                    className="text-sm"
+                    className="text-xs font-mono"
                   />
                   {errors.longitude && <p className="text-xs text-red-500 mt-1">{errors.longitude}</p>}
                 </div>
               </div>
+
+              {/* Helper: Gunakan Titik Pusat Desa (jika koordinat form belum diisi & desa punya koordinat) */}
+              {!form.latitude && !form.longitude && selectedDesa?.latitude != null && selectedDesa?.longitude != null && (
+                <div className="flex items-center justify-between p-2 rounded-lg bg-[var(--color-canvas-soft)] border border-[var(--color-hairline)] text-xs text-muted-foreground">
+                  <span className="truncate">
+                    📍 Pusat {selectedDesa.nama}: <code className="font-mono text-foreground font-medium">{selectedDesa.latitude.toFixed(4)}, {selectedDesa.longitude.toFixed(4)}</code>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setField('latitude', String(selectedDesa.latitude))
+                      setField('longitude', String(selectedDesa.longitude))
+                      toast.success('Titik pusat desa digunakan')
+                    }}
+                    className="px-2.5 py-1 rounded-md bg-[var(--color-surface)] border border-[var(--color-hairline)] text-[11px] font-semibold text-[var(--color-primary)] hover:bg-[var(--color-primary-light)] transition-colors shrink-0 ml-2"
+                  >
+                    Gunakan Titik Ini
+                  </button>
+                </div>
+              )}
+
+              {/* Warning jika desa dipilih TAPI koordinat pusat desa belum ada */}
+              {!form.latitude && !form.longitude && selectedDesa && (selectedDesa.latitude == null || selectedDesa.longitude == null) && (
+                <div className="flex items-start gap-2 p-2 rounded-lg border border-amber-300 bg-amber-50 text-xs text-amber-800">
+                  <TriangleAlert size={14} className="shrink-0 mt-0.5 text-amber-600" />
+                  <p>Titik pusat desa ({selectedDesa.nama}) belum diisi di menu Demografi.</p>
+                </div>
+              )}
+
+              {/* Map Picker Interactive */}
               {showMapPicker && (
-                <div className="mt-3">
+                <div className="mt-2 pt-2 border-t border-[var(--color-hairline)]">
                   <MapCoordinatePicker
                     latitude={measLat}
                     longitude={measLng}
@@ -457,18 +513,27 @@ export default function SinyalFormDialog({ open, onClose, onSuccess, editData, u
               )}
             </div>
 
-            {/* Smart Warnings */}
-            {distanceFromCenter != null && distanceFromCenter > 3 && (
-              <div className="flex items-start gap-2 p-2.5 rounded-lg border border-amber-300 bg-amber-50 text-xs text-amber-800">
-                <TriangleAlert size={14} className="shrink-0 mt-0.5 text-amber-600" />
-                <p>Lokasi pengukuran berada {distanceFromCenter.toFixed(1)} km dari pusat desa (lebih dari 3 km). Pastikan koordinat sudah sesuai dengan lokasi pengukuran sebenarnya.</p>
-              </div>
+            {/* Smart Warnings & Distance Alerts */}
+            {distanceFromCenter != null && (
+              distanceFromCenter > 3 ? (
+                <div className="flex items-start gap-2 p-2.5 rounded-lg border border-amber-300 bg-amber-50 text-xs text-amber-800">
+                  <TriangleAlert size={14} className="shrink-0 mt-0.5 text-amber-600" />
+                  <p>
+                    Lokasi pengukuran berada <strong>{distanceFromCenter.toFixed(1)} km</strong> dari pusat {selectedDesa?.nama ?? 'desa'} (lebih dari 3 km). Pastikan titik koordinat sudah sesuai dengan lokasi pengukuran sebenarnya.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-medium">
+                  <MapPin size={13} className="text-emerald-600 shrink-0" />
+                  <span>Berjarak <strong>{distanceFromCenter.toFixed(1)} km</strong> dari titik pusat {selectedDesa?.nama}</span>
+                </div>
+              )
             )}
 
             {selectedDesa && selectedDesa.latitude == null && (
               <div className="flex items-start gap-2 p-2.5 rounded-lg border border-amber-300 bg-amber-50 text-xs text-amber-800">
                 <MapPin size={14} className="shrink-0 mt-0.5 text-amber-600" />
-                <p>Koordinat pusat desa belum diisi. Peringatan jarak tidak dapat dihitung. Harap lengkapi koordinat desa melalui menu Demografi.</p>
+                <p>Koordinat pusat desa ({selectedDesa.nama}) belum diisi di sistem. Peringatan jarak tidak dapat dihitung.</p>
               </div>
             )}
 
@@ -476,7 +541,7 @@ export default function SinyalFormDialog({ open, onClose, onSuccess, editData, u
               <div className="p-2.5 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-soft)] text-xs space-y-1.5">
                 <div className="flex items-center gap-1.5 font-semibold text-foreground">
                   <TowerControl size={13} className="text-primary" />
-                  3 Tower Terdekat
+                  Tower Terdekat
                 </div>
                 {closestTowers.map(t => (
                   <div key={t.id} className="flex items-center justify-between pl-5">
@@ -487,7 +552,7 @@ export default function SinyalFormDialog({ open, onClose, onSuccess, editData, u
                   </div>
                 ))}
                 {noTowerNearby && (
-                  <p className="text-amber-700 mt-1 pl-5">Tidak ditemukan tower dalam radius 5 km dari lokasi ini. Pastikan titik koordinat sudah sesuai.</p>
+                  <p className="text-amber-700 mt-1 pl-5">Tidak ditemukan tower dalam radius 5 km dari lokasi ini. Pastikan titik koordinat sudah sesuai atau ajukan data tower.</p>
                 )}
               </div>
             )}

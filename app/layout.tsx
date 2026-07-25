@@ -1,4 +1,4 @@
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { Inter, Geist } from "next/font/google"
 import AuthProvider from "@/components/common/AuthProvider"
 import "./globals.css"
@@ -13,11 +13,14 @@ const inter = Inter({
   display: "swap",
 })
 
+export const viewport: Viewport = {
+  themeColor: "#0075de",
+}
+
 export const metadata: Metadata = {
   title: "SIGS Muara Enim — Sistem Informasi Geografis Signal",
   description: "Sistem pemetaan sinyal seluler Kabupaten Muara Enim untuk mendukung pengambilan keputusan infrastruktur telekomunikasi.",
   manifest: "/manifest.json",
-  themeColor: "#0075de",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",

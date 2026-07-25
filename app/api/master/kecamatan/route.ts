@@ -4,8 +4,6 @@ import { kecamatanSchema } from '@/lib/validations'
 
 export async function GET(request: Request) {
   try {
-    const { user, error } = await requireAuth()
-    if (error) return error
 
     const params = parseSearchParams(request)
     const isSelect = params.get('is_select') === 'true'

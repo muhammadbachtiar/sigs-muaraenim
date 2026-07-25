@@ -16,8 +16,12 @@ import {
   ChevronRight,
   UserCog,
   FileText,
+  AlertTriangle,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
+import dynamic from 'next/dynamic'
+
+const PwaBanner = dynamic(() => import('@/components/common/PwaBanner'), { ssr: false })
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -40,6 +44,7 @@ export default function DashboardLayout({
   const pathname = usePathname()
   const { data: session } = useSession()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [showLogoutModal, setShowLogoutModal] = useState(false)
 
   const userRole = (session?.user as any)?.role
   const userName = (session?.user as any)?.nama || session?.user?.name
@@ -143,7 +148,7 @@ export default function DashboardLayout({
             </Link>
           </div>
           <button
-            onClick={() => signOut({ callbackUrl: '/login' })}
+            onClick={() => setShowLogoutModal(true)}
             className="dash-sidebar__logout"
           >
             <LogOut size={12} />
@@ -151,6 +156,93 @@ export default function DashboardLayout({
           </button>
         </div>
       </aside>
+
+      {/* Logout Confirmation Modal */}
+      {showLogoutModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1000,
+            background: 'rgba(0,0,0,0.45)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+          }}
+          onClick={() => setShowLogoutModal(false)}
+        >
+          <div
+            style={{
+              background: 'var(--color-surface)',
+              borderRadius: '16px',
+              padding: '28px 24px',
+              maxWidth: '360px',
+              width: '100%',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
+              animation: 'fadeInScale 0.2s ease-out',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '12px' }}>
+              <div style={{
+                width: '52px', height: '52px', borderRadius: '50%',
+                background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <AlertTriangle size={24} color="#dc2626" />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--color-ink)', marginBottom: '6px' }}>
+                  Keluar dari SIGS?
+                </h3>
+                <p style={{ fontSize: '0.8125rem', color: 'var(--color-ink-muted)', lineHeight: 1.5 }}>
+                  Sesi Anda akan dihapus dan Anda perlu masuk kembali untuk mengakses dashboard.
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: '10px', width: '100%', marginTop: '4px' }}>
+                <button
+                  onClick={() => setShowLogoutModal(false)}
+                  style={{
+                    flex: 1, padding: '10px', borderRadius: '9999px',
+                    border: '1px solid var(--color-hairline)',
+                    background: 'var(--color-canvas-soft)',
+                    fontSize: '0.875rem', fontWeight: 500,
+                    color: 'var(--color-ink-secondary)', cursor: 'pointer',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={() => {
+                    setShowLogoutModal(false)
+                    const savedUsername = localStorage.getItem('sigs_remember_username')
+                    localStorage.clear()
+                    sessionStorage.clear()
+                    if (savedUsername) {
+                      localStorage.setItem('sigs_remember_username', savedUsername)
+                    }
+                    signOut({ callbackUrl: '/login' })
+                  }}
+                  style={{
+                    flex: 1, padding: '10px', borderRadius: '9999px',
+                    border: 'none',
+                    background: '#dc2626',
+                    fontSize: '0.875rem', fontWeight: 600,
+                    color: '#fff', cursor: 'pointer',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  Ya, Keluar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <PwaBanner />
 
       {/* Main area */}
       <div className="dash-main">
@@ -385,6 +477,10 @@ export default function DashboardLayout({
           .dash-topbar {
             padding: 0 16px;
           }
+        }
+        @keyframes fadeInScale {
+          from { opacity: 0; transform: scale(0.92); }
+          to { opacity: 1; transform: scale(1); }
         }
       `}</style>
     </div>

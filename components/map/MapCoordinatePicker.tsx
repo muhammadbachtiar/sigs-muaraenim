@@ -284,8 +284,7 @@ export default function MapCoordinatePicker({
         <div className="flex items-start gap-2 p-2.5 rounded-lg border border-amber-300 bg-amber-50 text-xs text-amber-800">
           <TriangleAlert size={14} className="shrink-0 mt-0.5 text-amber-600" />
           <p>
-            Titik yang dipilih berada di luar batas wilayah administrasi desa Anda.
-            Data tetap dapat disimpan untuk ditinjau oleh administrator.
+            Titik yang dipilih berada di luar batas wilayah administrasi desa Anda. Pastikan anda sudah yakin dengan titik koordinat yang dipilih.
           </p>
         </div>
       )}

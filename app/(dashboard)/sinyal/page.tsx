@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import {
@@ -48,7 +48,7 @@ type SinyalItem = {
 
 type Meta = { total: number; page: number; page_size: number; total_pages: number }
 
-export default function SinyalPage() {
+function SinyalPageInner() {
   const { data: session } = useSession()
   const userRole = (session?.user as any)?.role as 'SUPER_ADMIN' | 'PEMDES'
   const userId = (session?.user as any)?.id as string
@@ -741,5 +741,17 @@ export default function SinyalPage() {
         }}
       />
     </div>
+  )
+}
+
+export default function SinyalPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center py-20 text-muted-foreground">
+        <Loader2 size={24} className="animate-spin mr-2 text-primary" /> Memuat Riwayat Sinyal...
+      </div>
+    }>
+      <SinyalPageInner />
+    </Suspense>
   )
 }

@@ -52,6 +52,12 @@ export default function SinyalMap({
   const selectedKecamatanNama = kecamatanList.find((k) => k.id === selectedKecamatan)?.nama
   const selectedDesaNama = desaList.find((d) => d.id === selectedDesa)?.nama
 
+  // For PEMDES: fallback to their own desa boundary when no filter active
+  const userDesaNama = userRole === 'PEMDES' && userDesaId
+    ? desaList.find((d) => d.id === userDesaId)?.nama
+    : undefined
+  const effectiveDesaNama = selectedDesaNama || (userRole === 'PEMDES' ? userDesaNama : undefined)
+
   // IDW state
   const [idwPrediction, setIdwPrediction] = useState<IdwPredictionPoint | null>(null)
   const [idwGrid, setIdwGrid] = useState<IdwGridCell[]>([])
@@ -137,7 +143,7 @@ export default function SinyalMap({
       <LeafletMapBase height="calc(100vh - 280px)">
         <MapBoundary
           selectedKecamatanNama={selectedKecamatanNama}
-          selectedDesaNama={selectedDesaNama}
+          selectedDesaNama={effectiveDesaNama}
           kecamatanList={kecamatanList}
           desaList={desaList}
           onSelectKecamatan={onSelectKecamatan}

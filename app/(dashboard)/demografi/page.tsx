@@ -6,7 +6,7 @@ import dynamic from 'next/dynamic'
 import {
   Users, Search, Building2, MapPin, Map, Pencil, AlertCircle, ChevronLeft, ChevronRight,
   ChevronDown, Check, X, Coins, HeartPulse, GraduationCap, Store, Briefcase, FileText,
-  TriangleAlert
+  TriangleAlert, Loader2
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -143,6 +143,24 @@ export default function DemografiPage() {
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [showMapPickerModal, setShowMapPickerModal] = useState(false)
+  const [coordMode, setCoordMode] = useState<'none' | 'manual'>('none')
+  const [gettingLocation, setGettingLocation] = useState(false)
+
+  const handleGetCurrentLocation = () => {
+    if (!navigator.geolocation) return
+    setGettingLocation(true)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLatitude(String(pos.coords.latitude))
+        setLongitude(String(pos.coords.longitude))
+        setGettingLocation(false)
+      },
+      () => {
+        setGettingLocation(false)
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    )
+  }
 
   // --- DETAIL MODAL STATE (Super Admin) ---
   const [detailModalOpen, setDetailModalOpen] = useState(false)
@@ -730,59 +748,81 @@ export default function DemografiPage() {
 
           <div className="space-y-4 py-2 text-sm">
             <div className="grid grid-cols-2 gap-4">
-              {/* Coordinates Section */}
-              <div className="col-span-2 border border-hairline bg-[var(--color-canvas-soft)]/50 p-3 rounded-lg space-y-3">
+              {/* Coordinates Section — Form Manual Selalu Tampil & Sincronize */}
+              <div className="col-span-2 border border-hairline bg-[var(--color-canvas-soft)]/50 p-3 rounded-xl space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                     <MapPin size={13} className="text-primary" />
                     Koordinat Lokasi Desa (Pusat Desa)
                   </h3>
-                  <button
-                    type="button"
-                    onClick={() => setShowMapPickerModal(prev => !prev)}
-                    className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
-                  >
-                    <Map size={12} />
-                    {showMapPickerModal ? 'Tutup Peta' : 'Pilih dari Peta'}
-                  </button>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleGetCurrentLocation}
+                      disabled={gettingLocation}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-emerald-500/30 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-xs font-semibold transition-all disabled:opacity-50"
+                    >
+                      {gettingLocation ? <Loader2 size={12} className="animate-spin" /> : <MapPin size={12} />}
+                      Lokasi Saya
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowMapPickerModal(prev => !prev)}
+                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-semibold transition-all ${
+                        showMapPickerModal
+                          ? 'bg-primary text-white border-primary shadow-xs'
+                          : 'border-blue-500/30 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                      }`}
+                    >
+                      <Map size={12} />
+                      {showMapPickerModal ? 'Sembunyikan Peta' : 'Pilih dari Peta'}
+                    </button>
+                  </div>
                 </div>
+
+                {/* Form Tulis Manual — SELALU DITAMPILKAN */}
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="edit-lat">Latitude (Garis Lintang)</Label>
+                  <div className="space-y-1">
+                    <Label htmlFor="edit-lat" className="text-[11px] text-muted-foreground">Latitude (Lintang)</Label>
                     <input
                       id="edit-lat"
                       type="number"
                       step="any"
-                      placeholder="Contoh: -3.6540"
+                      placeholder="-3.6540"
                       value={latitude}
                       onChange={(e) => setLatitude(e.target.value)}
-                      className="flex h-9 w-full rounded-md border border-hairline bg-[var(--color-surface)] px-3 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+                      className="flex h-9 w-full rounded-md border border-hairline bg-[var(--color-surface)] px-3 py-1.5 text-xs font-mono focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
                     />
                   </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="edit-lng">Longitude (Garis Bujur)</Label>
+                  <div className="space-y-1">
+                    <Label htmlFor="edit-lng" className="text-[11px] text-muted-foreground">Longitude (Bujur)</Label>
                     <input
                       id="edit-lng"
                       type="number"
                       step="any"
-                      placeholder="Contoh: 103.8750"
+                      placeholder="103.8750"
                       value={longitude}
                       onChange={(e) => setLongitude(e.target.value)}
-                      className="flex h-9 w-full rounded-md border border-hairline bg-[var(--color-surface)] px-3 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+                      className="flex h-9 w-full rounded-md border border-hairline bg-[var(--color-surface)] px-3 py-1.5 text-xs font-mono focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
                     />
                   </div>
                 </div>
+
                 {showMapPickerModal && (
-                  <MapCoordinatePicker
-                    latitude={latitude ? parseFloat(latitude) : null}
-                    longitude={longitude ? parseFloat(longitude) : null}
-                    onChange={(lat, lng) => {
-                      setLatitude(String(lat))
-                      setLongitude(String(lng))
-                    }}
-                    selectedDesaNama={activeDesaNama}
-                    userRole={isSuperAdmin ? 'SUPER_ADMIN' : 'PEMDES'}
-                  />
+                  <div className="pt-2 border-t border-hairline">
+                    <MapCoordinatePicker
+                      latitude={latitude ? parseFloat(latitude) : null}
+                      longitude={longitude ? parseFloat(longitude) : null}
+                      onChange={(lat, lng) => {
+                        setLatitude(String(lat))
+                        setLongitude(String(lng))
+                      }}
+                      selectedDesaNama={activeDesaNama}
+                      userRole={isSuperAdmin ? 'SUPER_ADMIN' : 'PEMDES'}
+                    />
+                  </div>
                 )}
                 <p className="text-[10px] text-muted-foreground">
                   Gunakan titik kantor desa atau pusat keramaian sebagai acuan perhitungan jarak sinyal.

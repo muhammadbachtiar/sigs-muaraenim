@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 import { Signal, SlidersHorizontal, RefreshCw, X, Loader2, MapPin } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import SearchableSelect from '@/components/ui/searchable-select'
 
 const PublicSinyalMap = dynamic(() => import('@/components/map/PublicSinyalMap'), {
   ssr: false,
@@ -111,19 +112,16 @@ export default function PetaPublikPage() {
             <label className="text-[11px] font-semibold text-muted-foreground block mb-1">
               Kecamatan <span className="text-red-500">*</span>
             </label>
-            <select
+            <SearchableSelect
+              options={kecamatanList.map(k => ({ value: k.id, label: k.nama }))}
               value={selectedKecamatan}
-              onChange={e => {
-                setSelectedKecamatan(e.target.value)
+              onChange={val => {
+                setSelectedKecamatan(val)
                 setSelectedDesa('')
               }}
-              className="w-full text-xs px-3 py-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-surface)] outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-            >
-              <option value="">-- Pilih Kecamatan --</option>
-              {kecamatanList.map(k => (
-                <option key={k.id} value={k.id}>{k.nama}</option>
-              ))}
-            </select>
+              placeholder="— Pilih Kecamatan —"
+              searchPlaceholder="Cari kecamatan..."
+            />
           </div>
 
           {/* Select Desa */}
@@ -131,23 +129,20 @@ export default function PetaPublikPage() {
             <label className="text-[11px] font-semibold text-muted-foreground block mb-1">
               Desa / Kelurahan <span className="text-red-500">*</span>
             </label>
-            <select
+            <SearchableSelect
               disabled={!selectedKecamatan || loadingDesa}
+              options={desaList.map(d => ({ value: d.id, label: d.nama }))}
               value={selectedDesa}
-              onChange={e => setSelectedDesa(e.target.value)}
-              className="w-full text-xs px-3 py-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-surface)] outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:opacity-50"
-            >
-              <option value="">
-                {!selectedKecamatan
-                  ? '-- Pilih Kecamatan Dulu --'
+              onChange={setSelectedDesa}
+              placeholder={
+                !selectedKecamatan
+                  ? '— Pilih Kecamatan Dulu —'
                   : loadingDesa
                   ? 'Memuat desa...'
-                  : '-- Pilih Desa/Kelurahan --'}
-              </option>
-              {desaList.map(d => (
-                <option key={d.id} value={d.id}>{d.nama}</option>
-              ))}
-            </select>
+                  : '— Pilih Desa/Kelurahan —'
+              }
+              searchPlaceholder="Cari desa/kelurahan..."
+            />
           </div>
 
           {/* Status Indicator / Clear */}

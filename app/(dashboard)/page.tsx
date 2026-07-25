@@ -273,11 +273,10 @@ export default function DashboardPage() {
                         <span className="font-medium text-foreground">{s.operator.nama}</span>
                         <span className="text-muted-foreground"> — {s.desaKelurahan.nama}</span>
                       </div>
-                      <span className={`shrink-0 ml-3 font-mono text-xs font-medium px-2 py-0.5 rounded-full ${
-                        (s.rsrp ?? -999) >= -85 ? 'bg-[#f0fdf4] text-[#16a34a]' :
-                        (s.rsrp ?? -999) >= -100 ? 'bg-[#fffbeb] text-[#d97706]' :
-                        'bg-[#fef2f2] text-[#dc2626]'
-                      }`}>
+                      <span className={`shrink-0 ml-3 font-mono text-xs font-medium px-2 py-0.5 rounded-full ${(s.rsrp ?? -999) >= -85 ? 'bg-[#f0fdf4] text-[#16a34a]' :
+                          (s.rsrp ?? -999) >= -100 ? 'bg-[#fffbeb] text-[#d97706]' :
+                            'bg-[#fef2f2] text-[#dc2626]'
+                        }`}>
                         {s.rsrp ?? '—'} dBm
                       </span>
                     </div>
@@ -415,7 +414,7 @@ function DesaCompletenessCard({ stats }: { stats: DashboardStats }) {
             <TowerControl size={15} className="text-blue-600 shrink-0 mt-0.5" />
             <p className="text-xs text-blue-800">
               Belum terdeteksi tower telekomunikasi aktif dalam radius 5 km dari pusat desa.
-              Pengajuan pembangunan tower baru disarankan melalui menu Tower.
+              Tambahkan data tower terdekat di daerah Anda.
             </p>
           </div>
         )}

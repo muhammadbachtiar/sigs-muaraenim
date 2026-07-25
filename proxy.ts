@@ -5,11 +5,14 @@ import { getToken } from 'next-auth/jwt'
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
+  // Bypass static files, images, public assets, and auth routes
   if (
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/uploads') ||
+    pathname.startsWith('/data') ||
     pathname.startsWith('/_next') ||
-    pathname === '/favicon.ico'
+    pathname.startsWith('/.well-known') ||
+    pathname.match(/\.(png|jpg|jpeg|svg|webp|ico|json|geojson|css|js)$/i)
   ) {
     return NextResponse.next()
   }
@@ -31,6 +34,7 @@ export async function proxy(request: NextRequest) {
   const isPublicRoute =
     pathname.startsWith('/peta') ||
     pathname.startsWith('/api/public') ||
+    (request.method === 'GET' && pathname.startsWith('/api/master')) ||
     pathname === '/docs' ||
     pathname === '/openapi.json'
 
@@ -46,8 +50,15 @@ export async function proxy(request: NextRequest) {
       )
     }
 
+    // Only set callbackUrl if the pathname is an actual application page (not static asset or devtools)
+    const isStaticOrDevtools =
+      pathname.match(/\.(png|jpg|jpeg|svg|webp|ico|json|geojson)$/i) ||
+      pathname.includes('.well-known')
+
     const loginUrl = new URL('/login', request.url)
-    loginUrl.searchParams.set('callbackUrl', pathname)
+    if (!isStaticOrDevtools && pathname !== '/') {
+      loginUrl.searchParams.set('callbackUrl', pathname)
+    }
     return NextResponse.redirect(loginUrl)
   }
 

@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, Suspense } from 'react'
 import { useSession } from 'next-auth/react'
+import { useSearchParams } from 'next/navigation'
 import {
   TowerControl, Plus, Search, MapPin, Map, Pencil, CheckCircle2, AlertCircle,
   XCircle, Clock, Eye, Trash2, Camera, Upload, Loader2, RefreshCw,
@@ -98,7 +99,7 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
-export default function TowerPage() {
+function TowerPage() {
   const { data: session, status } = useSession()
   const user = session?.user as any
   const isSuperAdmin = user?.role === 'SUPER_ADMIN'
@@ -163,6 +164,8 @@ export default function TowerPage() {
 
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [formCoordMode, setFormCoordMode] = useState<'none' | 'map' | 'manual'>('none')
+  const [formGettingLocation, setFormGettingLocation] = useState(false)
 
   // Verification Form State (Super Admin)
   const [verifyStatus, setVerifyStatus] = useState<'APPROVED' | 'REJECTED'>('APPROVED')
@@ -323,6 +326,25 @@ export default function TowerPage() {
     setFormPhotos([])
     setFormDesas([])
     setFormError('')
+    setFormCoordMode('none')
+  }
+
+  const handleFormGetLocation = () => {
+    if (!navigator.geolocation) return
+    setFormGettingLocation(true)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setFormLat(String(pos.coords.latitude))
+        setFormLng(String(pos.coords.longitude))
+        setFormGettingLocation(false)
+        toast.success('Koordinat berhasil diambil dari GPS')
+      },
+      () => {
+        setFormGettingLocation(false)
+        toast.error('Gagal mendapatkan lokasi. Pastikan izin lokasi diberikan.')
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    )
   }
 
   // --- OPEN MODAL HANDLERS ---
@@ -330,6 +352,15 @@ export default function TowerPage() {
     resetForm()
     setShowFormModal(true)
   }
+
+  // Auto-open form from shortcut (?action=create)
+  const searchParams = useSearchParams()
+  useEffect(() => {
+    if (searchParams.get('action') === 'create') {
+      openAddModal()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   const openEditModal = async (tower: TowerItem) => {
     setActiveTower(tower)
@@ -1298,62 +1329,123 @@ export default function TowerPage() {
               </div>
             </div>
 
-            {/* Row 3: Latitude & Longitude */}
-            <div className="space-y-2">
+            {/* Row 3: Koordinat Lokasi — Form Manual Selalu Tampil & Sincronize */}
+            <div className="space-y-3 border border-hairline p-3 rounded-xl bg-[var(--color-surface)]">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                   <MapPin size={13} className="text-primary" /> Koordinat Lokasi Tower
                 </h4>
-                <button
-                  type="button"
-                  onClick={() => setShowTowerMapPicker(prev => !prev)}
-                  className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
-                >
-                  <Map size={12} />
-                  {showTowerMapPicker ? 'Tutup Peta' : 'Pilih dari Peta'}
-                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleFormGetLocation}
+                    disabled={formGettingLocation}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-emerald-500/30 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-xs font-semibold transition-all disabled:opacity-50"
+                  >
+                    {formGettingLocation ? <Loader2 size={12} className="animate-spin" /> : <MapPin size={12} />}
+                    Lokasi Saya
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowTowerMapPicker(prev => !prev)}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-semibold transition-all ${
+                      showTowerMapPicker
+                        ? 'bg-primary text-white border-primary shadow-xs'
+                        : 'border-blue-500/30 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                    }`}
+                  >
+                    <Map size={12} />
+                    {showTowerMapPicker ? 'Sembunyikan Peta' : 'Pilih dari Peta'}
+                  </button>
+                </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="form-lat">Latitude <span className="text-destructive">*</span></Label>
+
+              {/* Form Tulis Manual — SELALU DITAMPILKAN */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="form-lat" className="text-[11px] text-muted-foreground">
+                    Latitude (Lintang) <span className="text-destructive">*</span>
+                  </Label>
                   <Input
                     id="form-lat"
                     type="number"
                     step="any"
-                    placeholder="Contoh: -3.654321"
+                    placeholder="-3.654321"
                     value={formLat}
                     onChange={(e) => setFormLat(e.target.value)}
+                    className="text-xs font-mono"
                   />
-                  <p className="text-[10px] text-muted-foreground">Garis lintang lokasi tower. Gunakan GPS atau Google Maps.</p>
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="form-lng">Longitude <span className="text-destructive">*</span></Label>
+                <div className="space-y-1">
+                  <Label htmlFor="form-lng" className="text-[11px] text-muted-foreground">
+                    Longitude (Bujur) <span className="text-destructive">*</span>
+                  </Label>
                   <Input
                     id="form-lng"
                     type="number"
                     step="any"
-                    placeholder="Contoh: 103.789012"
+                    placeholder="103.789012"
                     value={formLng}
                     onChange={(e) => setFormLng(e.target.value)}
+                    className="text-xs font-mono"
                   />
-                  <p className="text-[10px] text-muted-foreground">Garis bujur lokasi tower. Gunakan GPS atau Google Maps.</p>
                 </div>
               </div>
+
+              {/* Helper: Gunakan Titik Pusat Desa (jika koordinat form belum diisi & desa punya koordinat) */}
+              {!formLat && !formLng && (() => {
+                const selectedDesaData = formDesas.find(d => d.id === formDesaId) as any
+                if (selectedDesaData?.latitude != null && selectedDesaData?.longitude != null) {
+                  return (
+                    <div className="flex items-center justify-between p-2 rounded-lg bg-[var(--color-canvas-soft)] border border-[var(--color-hairline)] text-xs text-muted-foreground">
+                      <span className="truncate">
+                        📍 Pusat {selectedDesaData.nama}: <code className="font-mono text-foreground font-medium">{Number(selectedDesaData.latitude).toFixed(4)}, {Number(selectedDesaData.longitude).toFixed(4)}</code>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormLat(String(selectedDesaData.latitude))
+                          setFormLng(String(selectedDesaData.longitude))
+                          toast.success('Titik pusat desa digunakan')
+                        }}
+                        className="px-2.5 py-1 rounded-md bg-[var(--color-surface)] border border-[var(--color-hairline)] text-[11px] font-semibold text-[var(--color-primary)] hover:bg-[var(--color-primary-light)] transition-colors shrink-0 ml-2"
+                      >
+                        Gunakan Titik Ini
+                      </button>
+                    </div>
+                  )
+                }
+                if (formDesaId && (selectedDesaData?.latitude == null || selectedDesaData?.longitude == null)) {
+                  return (
+                    <div className="flex items-start gap-2 p-2 rounded-lg border border-amber-300 bg-amber-50 text-xs text-amber-800">
+                      <AlertTriangle size={14} className="shrink-0 mt-0.5 text-amber-600" />
+                      <p>Titik pusat desa ({selectedDesaData?.nama}) belum diisi di menu Demografi.</p>
+                    </div>
+                  )
+                }
+                return null
+              })()}
+
+              {/* Map Picker Interactive */}
               {showTowerMapPicker && (() => {
                 const selectedDesa = formDesas.find(d => d.id === formDesaId)
                 const selectedKec = allKecamatans.find(k => k.id === formKecId)
                 return (
-                  <MapCoordinatePicker
-                    latitude={formLatNum}
-                    longitude={formLngNum}
-                    onChange={(lat, lng) => {
-                      setFormLat(String(lat))
-                      setFormLng(String(lng))
-                    }}
-                    selectedDesaNama={selectedDesa?.nama}
-                    selectedKecamatanNama={selectedKec?.nama}
-                    userRole={isSuperAdmin ? 'SUPER_ADMIN' : 'PEMDES'}
-                  />
+                  <div className="mt-2 pt-2 border-t border-hairline">
+                    <MapCoordinatePicker
+                      latitude={formLatNum}
+                      longitude={formLngNum}
+                      onChange={(lat, lng) => {
+                        setFormLat(String(lat))
+                        setFormLng(String(lng))
+                      }}
+                      selectedDesaNama={selectedDesa?.nama}
+                      selectedKecamatanNama={selectedKec?.nama}
+                      userRole={isSuperAdmin ? 'SUPER_ADMIN' : 'PEMDES'}
+                    />
+                  </div>
                 )
               })()}
             </div>
@@ -1914,5 +2006,13 @@ export default function TowerPage() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+export default function TowerPageWrapper() {
+  return (
+    <Suspense fallback={null}>
+      <TowerPage />
+    </Suspense>
   )
 }

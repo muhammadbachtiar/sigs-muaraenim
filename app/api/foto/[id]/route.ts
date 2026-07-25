@@ -29,7 +29,7 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
 
     // Delete file from disk
     try {
-      const filepath = path.join(process.cwd(), foto.url)
+      const filepath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', foto.url.replace(/^\//, ''))
       await unlink(filepath)
     } catch {
       // File might not exist, continue with DB deletion

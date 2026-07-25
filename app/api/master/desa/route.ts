@@ -4,8 +4,6 @@ import { desaSchema } from '@/lib/validations'
 
 export async function GET(request: Request) {
   try {
-    const { user, error } = await requireAuth()
-    if (error) return error
 
     const params = parseSearchParams(request)
     const isSelect = params.get('is_select') === 'true'
@@ -23,9 +21,26 @@ export async function GET(request: Request) {
       const data = await prisma.desaKelurahan.findMany({
         where,
         orderBy: { nama: 'asc' },
-        select: { id: true, nama: true, kecamatanId: true }
+        select: {
+          id: true,
+          nama: true,
+          kecamatanId: true,
+          latitude: true,
+          longitude: true,
+          kecamatan: { select: { id: true, nama: true } },
+        }
       })
-      return successResponse(data, 'Data desa untuk select berhasil diambil')
+
+      const formatted = data.map((d: any) => ({
+        id: d.id,
+        nama: d.nama,
+        kecamatanId: d.kecamatanId,
+        latitude: d.latitude ?? null,
+        longitude: d.longitude ?? null,
+        kecamatan: d.kecamatan,
+      }))
+
+      return successResponse(formatted, 'Data desa untuk select berhasil diambil')
     }
 
     const { page, pageSize, skip, take, search } = parsePagination(params)
