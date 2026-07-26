@@ -3,12 +3,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import dynamic from 'next/dynamic'
+import { useRouter } from 'next/navigation'
 import {
   Users, Search, Building2, MapPin, Map, Pencil, AlertCircle, ChevronLeft, ChevronRight,
   ChevronDown, Check, X, Coins, HeartPulse, GraduationCap, Store, Briefcase, FileText,
-  TriangleAlert, Loader2
+  TriangleAlert, Loader2, TowerControl, Plus, CheckCircle2,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { scrollToFirstError } from '@/lib/scroll-to-error'
 
 const DesaDetailMap = dynamic(() => import('@/components/map/DesaDetailMap'), {
   ssr: false,
@@ -95,6 +97,7 @@ type KecamatanItem = {
 }
 
 export default function DemografiPage() {
+  const router = useRouter()
   const { data: session, status } = useSession()
   const user = session?.user as any
 
@@ -293,7 +296,18 @@ export default function DemografiPage() {
   const handleEditSubmit = async () => {
     if (!activeDesaId) return
     setFormError('')
-    setSubmitting(true)
+
+    // Basic validation
+    if (latitude && (isNaN(parseFloat(latitude)) || parseFloat(latitude) < -90 || parseFloat(latitude) > 90)) {
+      setFormError('Latitude tidak valid (-90 s/d 90)')
+      scrollToFirstError('[role="dialog"]')
+      return
+    }
+    if (longitude && (isNaN(parseFloat(longitude)) || parseFloat(longitude) < -180 || parseFloat(longitude) > 180)) {
+      setFormError('Longitude tidak valid (-180 s/d 180)')
+      scrollToFirstError('[role="dialog"]')
+      return
+    }
 
     const payload = {
       jumlahPenduduk: jumlahPenduduk ? parseInt(jumlahPenduduk, 10) : null,
@@ -970,8 +984,43 @@ export default function DemografiPage() {
   function renderDetailView(data: DemografiData, onEditAction: (() => void) | null) {
     const desa = data.desaKelurahan
 
+    // Profile completeness calculation
+    const profileMetrics = [
+      { label: 'Koordinat Pusat Desa', valid: desa.latitude != null && desa.longitude != null },
+      { label: 'Jumlah Penduduk', valid: data.jumlahPenduduk != null },
+      { label: 'Usia Produktif', valid: data.usiaProduktif != null },
+      { label: 'Kepadatan Penduduk', valid: data.kepadatan != null },
+      { label: 'Mata Pencaharian Utama', valid: !!data.mataPencaharianUtama },
+      { label: 'Rata-rata Penghasilan', valid: data.rataRataPenghasilan != null },
+      { label: 'Kegiatan Ekonomi', valid: !!data.kegiatanEkonomi },
+    ]
+    const validCount = profileMetrics.filter(m => m.valid).length
+    const completenessPercent = Math.round((validCount / profileMetrics.length) * 100)
+
     return (
       <div className="space-y-6">
+        {/* Profile Completeness Banner (for PEMDES) */}
+        {!isSuperAdmin && (
+          <div className="p-4 rounded-xl border border-hairline bg-[var(--color-surface)] shadow-soft space-y-2">
+            <div className="flex items-center justify-between text-xs font-semibold">
+              <span className="flex items-center gap-1.5 text-foreground">
+                <CheckCircle2 size={15} className="text-primary" /> Kelengkapan Profil Desa
+              </span>
+              <span className="font-mono text-primary font-bold">{completenessPercent}% Complete</span>
+            </div>
+            <div className="w-full h-2 rounded-full bg-[var(--color-canvas-soft)] overflow-hidden">
+              <div
+                className="h-full bg-primary transition-all duration-500 rounded-full"
+                style={{ width: `${completenessPercent}%` }}
+              />
+            </div>
+            {completenessPercent < 100 && (
+              <p className="text-[11px] text-muted-foreground">
+                Lengkapi data yang belum terisi: <strong className="text-foreground">{profileMetrics.filter(m => !m.valid).map(m => m.label).join(', ')}</strong>
+              </p>
+            )}
+          </div>
+        )}
         {/* Village Summary Header Card */}
         <div className="relative overflow-hidden bg-gradient-to-br from-primary/5 via-transparent to-transparent border border-hairline rounded-2xl p-5 md:p-6 shadow-soft">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -1133,6 +1182,30 @@ export default function DemografiPage() {
                 <span className={`inline-flex px-2 py-0.5 rounded-full text-[9px] font-bold ${data.pasar ? 'bg-success-light text-success' : 'bg-red-50 text-red-600'}`}>
                   {data.pasar ? 'Tersedia' : 'Tidak Ada'}
                 </span>
+              </div>
+
+              {/* Status Kepemilikan Tower */}
+              <div className="pt-2 border-t border-hairline space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <TowerControl className="text-primary w-5 h-5" />
+                    <span className="text-xs font-semibold text-foreground">Infrastruktur Tower</span>
+                  </div>
+                </div>
+                <div className="p-2.5 rounded-lg bg-[var(--color-canvas-soft)]/40 border border-hairline text-xs space-y-2">
+                  <p className="text-[11px] text-muted-foreground">
+                    Status keberadaan tower telekomunikasi di area desa ini:
+                  </p>
+                  {!isSuperAdmin && (
+                    <Button
+                      size="sm"
+                      onClick={() => router.push('/tower?action=create')}
+                      className="w-full text-xs h-8 bg-primary hover:bg-primary/90 text-white flex items-center justify-center gap-1.5 shadow-xs"
+                    >
+                      <Plus size={13} /> Ajukan Pengajuan Tower Baru
+                    </Button>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>

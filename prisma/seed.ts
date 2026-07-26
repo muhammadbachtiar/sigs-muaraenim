@@ -36,7 +36,7 @@ async function main() {
   })
   console.log(`✅ Super Admin berhasil di-seed: ${username}`)
 
-  const operators = ['Telkomsel', 'Indosat Ooredoo', 'XL Axiata', 'Tri', 'Smartfren']
+  const operators = ['Telkomsel', 'Indosat Ooredoo', 'XL Axiata', 'Tri', 'Smartfren', 'No Signal / Blankspot']
   for (const nama of operators) {
     await prisma.operator.upsert({
       where: { nama },
@@ -49,7 +49,7 @@ async function main() {
   }
   console.log(`✅ Operator berhasil di-seed.`)
 
-  const teknologis = ['2G', '3G', '4G LTE', '5G']
+  const teknologis = ['2G', '3G', '4G LTE', '5G', 'No Signal / Blankspot']
   for (const nama of teknologis) {
     await prisma.teknologi.upsert({
       where: { nama },

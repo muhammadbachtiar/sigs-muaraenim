@@ -1,10 +1,12 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { MapPin, Loader2, TriangleAlert, Lightbulb, Check } from 'lucide-react'
+import { MapPin, Loader2, TriangleAlert, Lightbulb, Check, Navigation } from 'lucide-react'
 import { MapContainer, TileLayer, GeoJSON, Marker, useMapEvents, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { isPointInPolygon as spatialPointInPolygon, detectDesaFromCoords, findDesaFeature, isInsideMuaraEnim } from '@/lib/spatial-helpers'
+import type { GeoJsonFeature as SpatialGeoJsonFeature } from '@/lib/spatial-helpers'
 
 // Fix Leaflet default icon
 delete (L.Icon.Default.prototype as any)._getIconUrl
@@ -46,35 +48,16 @@ type Props = {
   userRole?: 'SUPER_ADMIN' | 'PEMDES'
   showIdwRecommendation?: boolean
   onIdwRecommendation?: (prediction: IdwPrediction) => void
+  /** Callback when a desa is auto-detected from coordinates */
+  onAutoDetectDesa?: (desaNama: string, kecamatanNama: string) => void
+  /** Optional center coords of selected desa for distance display */
+  desaCenterLat?: number | null
+  desaCenterLng?: number | null
+  /** When set, map will fly/pan to this coordinate (e.g., when desa/kec selected before placing pin) */
+  focusCenter?: [number, number] | null
 }
 
-function isPointInPolygon(lat: number, lng: number, geoJsonFeature: GeoJsonFeature): boolean {
-  try {
-    const geom = geoJsonFeature.geometry
-    if (!geom) return false
-
-    const checkRing = (ring: number[][]): boolean => {
-      let inside = false
-      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-        const xi = ring[i][0], yi = ring[i][1]
-        const xj = ring[j][0], yj = ring[j][1]
-        const intersect = ((yi > lat) !== (yj > lat)) && (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi)
-        if (intersect) inside = !inside
-      }
-      return inside
-    }
-
-    if (geom.type === 'Polygon') {
-      return checkRing(geom.coordinates[0])
-    }
-    if (geom.type === 'MultiPolygon') {
-      return geom.coordinates.some((poly: number[][][]) => checkRing(poly[0]))
-    }
-  } catch {
-    // ignore
-  }
-  return false
-}
+// isPointInPolygon is now imported from lib/spatial-helpers.ts with correct lat/lng ordering
 
 function MapClickHandler({ onClick }: { onClick: (lat: number, lng: number) => void }) {
   useMapEvents({
@@ -102,6 +85,23 @@ function AutoFitBounds({ feature }: { feature: GeoJsonFeature | null }) {
   return null
 }
 
+/** Fly/pan map to a given center coordinate imperatively when focusCenter changes */
+function FlyToCenter({ center }: { center: [number, number] | null }) {
+  const map = useMap()
+  const prevCenter = useRef<[number, number] | null>(null)
+  useEffect(() => {
+    if (!center) return
+    if (
+      prevCenter.current &&
+      prevCenter.current[0] === center[0] &&
+      prevCenter.current[1] === center[1]
+    ) return
+    prevCenter.current = center
+    map.flyTo(center, 13, { animate: true, duration: 1 })
+  }, [center, map])
+  return null
+}
+
 export default function MapCoordinatePicker({
   latitude,
   longitude,
@@ -111,10 +111,15 @@ export default function MapCoordinatePicker({
   userRole,
   showIdwRecommendation = false,
   onIdwRecommendation,
+  onAutoDetectDesa,
+  desaCenterLat,
+  desaCenterLng,
+  focusCenter,
 }: Props) {
   const [geoData, setGeoData] = useState<GeoJsonFeature | null>(null)
   const [loadingGeo, setLoadingGeo] = useState(false)
   const [isOutside, setIsOutside] = useState(false)
+  const [distanceInfo, setDistanceInfo] = useState<number | null>(null)
   const [idwPrediction, setIdwPrediction] = useState<IdwPrediction | null>(null)
   const [fetchingIdw, setFetchingIdw] = useState(false)
   const [idwApplied, setIdwApplied] = useState(false)
@@ -124,54 +129,64 @@ export default function MapCoordinatePicker({
     ? [latitude, longitude]
     : [-3.75, 103.85]
 
-  // Load GeoJSON boundary
+  // Load GeoJSON boundary using spatial helpers
   useEffect(() => {
     if (!selectedDesaNama && !selectedKecamatanNama) {
       setGeoData(null)
       return
     }
     setLoadingGeo(true)
-    fetch('/data/muara-enim-desa.geojson')
-      .then(r => r.json())
-      .then(json => {
-        const features: GeoJsonFeature[] = json.features
-        let found: GeoJsonFeature | null = null
-
-        if (selectedDesaNama) {
-          const search = selectedDesaNama.toLowerCase().trim()
-          found = features.find(f =>
-            f.properties.kel_desa?.toLowerCase().trim() === search ||
-            f.properties.nama?.toLowerCase().includes(search) ||
-            f.properties.ori_name?.toLowerCase().trim() === search
-          ) ?? null
-        }
-
-        if (!found && selectedKecamatanNama) {
-          // Group all features for the kecamatan and merge them
+    if (selectedDesaNama) {
+      findDesaFeature(selectedDesaNama, selectedKecamatanNama)
+        .then(feature => {
+          geoJsonKey.current += 1
+          setGeoData(feature as GeoJsonFeature | null)
+        })
+        .finally(() => setLoadingGeo(false))
+    } else if (selectedKecamatanNama) {
+      // Load kecamatan-level boundary (first desa in that kecamatan)
+      fetch('/data/muara-enim-desa.geojson')
+        .then(r => r.json())
+        .then(json => {
+          const features: GeoJsonFeature[] = json.features
           const kecSearch = selectedKecamatanNama.toLowerCase().trim()
           const kecFeatures = features.filter(f =>
             f.properties.kecamatan?.toLowerCase().trim() === kecSearch
           )
-          if (kecFeatures.length > 0) {
-            found = kecFeatures[0]
-          }
-        }
-
-        geoJsonKey.current += 1
-        setGeoData(found)
-      })
-      .catch(() => setGeoData(null))
-      .finally(() => setLoadingGeo(false))
+          geoJsonKey.current += 1
+          setGeoData(kecFeatures.length > 0 ? kecFeatures[0] : null)
+        })
+        .catch(() => setGeoData(null))
+        .finally(() => setLoadingGeo(false))
+    } else {
+      setLoadingGeo(false)
+    }
   }, [selectedDesaNama, selectedKecamatanNama])
 
-  // Check if current coordinate is inside the boundary
+  // Check if current coordinate is inside the boundary polygon (primary check)
+  // Uses corrected isPointInPolygon from spatial-helpers with proper lat/lng ordering
   useEffect(() => {
-    if (!geoData || latitude == null || longitude == null || userRole !== 'PEMDES') {
+    if (!geoData || latitude == null || longitude == null) {
       setIsOutside(false)
+      setDistanceInfo(null)
       return
     }
-    setIsOutside(!isPointInPolygon(longitude, latitude, geoData))
-  }, [geoData, latitude, longitude, userRole])
+
+    // Polygon boundary check — primary indicator
+    const inside = spatialPointInPolygon(latitude, longitude, geoData as SpatialGeoJsonFeature)
+    setIsOutside(!inside)
+
+    // Distance to center — secondary info
+    if (desaCenterLat != null && desaCenterLng != null) {
+      const R = 6371
+      const dLat = (latitude - desaCenterLat) * Math.PI / 180
+      const dLng = (longitude - desaCenterLng) * Math.PI / 180
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(desaCenterLat * Math.PI / 180) * Math.cos(latitude * Math.PI / 180) * Math.sin(dLng / 2) ** 2
+      setDistanceInfo(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)))
+    } else {
+      setDistanceInfo(null)
+    }
+  }, [geoData, latitude, longitude, desaCenterLat, desaCenterLng])
 
   // Fetch IDW prediction when coordinate changes
   useEffect(() => {
@@ -207,9 +222,16 @@ export default function MapCoordinatePicker({
     return () => controller.abort()
   }, [latitude, longitude, showIdwRecommendation])
 
-  const handleMapClick = useCallback((lat: number, lng: number) => {
+  const handleMapClick = useCallback(async (lat: number, lng: number) => {
     onChange(lat, lng)
-  }, [onChange])
+    // Auto-detect desa from clicked coordinates if no desa is currently selected
+    if (onAutoDetectDesa && !selectedDesaNama) {
+      const detected = await detectDesaFromCoords(lat, lng)
+      if (detected) {
+        onAutoDetectDesa(detected.desaNama, detected.kecamatanNama)
+      }
+    }
+  }, [onChange, onAutoDetectDesa, selectedDesaNama])
 
   const handleApplyIdw = () => {
     if (!idwPrediction || !onIdwRecommendation) return
@@ -268,6 +290,7 @@ export default function MapCoordinatePicker({
 
           <MapClickHandler onClick={handleMapClick} />
           <AutoFitBounds feature={geoData} />
+          <FlyToCenter center={focusCenter ?? null} />
         </MapContainer>
 
         {/* Hint overlay */}
@@ -279,25 +302,54 @@ export default function MapCoordinatePicker({
         </div>
       </div>
 
-      {/* Out of boundary warning for PEMDES */}
-      {isOutside && (
-        <div className="flex items-start gap-2 p-2.5 rounded-lg border border-amber-300 bg-amber-50 text-xs text-amber-800">
-          <TriangleAlert size={14} className="shrink-0 mt-0.5 text-amber-600" />
-          <p>
-            Titik yang dipilih berada di luar batas wilayah administrasi desa Anda. Pastikan anda sudah yakin dengan titik koordinat yang dipilih.
-          </p>
-        </div>
-      )}
-
-      {/* Coordinate display */}
+      {/* Boundary & distance info panel */}
       {latitude != null && longitude != null && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-canvas-soft)] border border-hairline text-xs font-mono text-muted-foreground">
-          <MapPin size={12} className="text-primary shrink-0" />
-          <span>
-            Lat: <strong className="text-foreground">{latitude.toFixed(6)}</strong>
-            {' '}&nbsp;{' '}
-            Lng: <strong className="text-foreground">{longitude.toFixed(6)}</strong>
-          </span>
+        <div className="space-y-1.5">
+          {/* Coordinate display */}
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-canvas-soft)] border border-hairline text-xs font-mono text-muted-foreground">
+            <MapPin size={12} className="text-primary shrink-0" />
+            <span>
+              Lat: <strong className="text-foreground">{latitude.toFixed(6)}</strong>
+              {' '}&nbsp;{' '}
+              Lng: <strong className="text-foreground">{longitude.toFixed(6)}</strong>
+            </span>
+          </div>
+
+          {/* Distance info chip (secondary — always show when available) */}
+          {distanceInfo != null && (
+            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium ${
+              distanceInfo > 15
+                ? 'bg-red-50 border border-red-200 text-red-700'
+                : distanceInfo > 5
+                ? 'bg-amber-50 border border-amber-200 text-amber-700'
+                : 'bg-emerald-50 border border-emerald-200 text-emerald-700'
+            }`}>
+              <Navigation size={12} className="shrink-0" />
+              📍 Berjarak <strong>{distanceInfo.toFixed(1)} km</strong> dari pusat desa
+              {distanceInfo > 15 && ' — sangat jauh, periksa kembali koordinat'}
+            </div>
+          )}
+
+          {/* Out of boundary warning — polygon-based (primary indicator) */}
+          {isOutside && geoData && (
+            <div className="flex items-start gap-2 p-2.5 rounded-lg border border-amber-300 bg-amber-50 text-xs text-amber-800">
+              <TriangleAlert size={14} className="shrink-0 mt-0.5 text-amber-600" />
+              <p>
+                Titik yang dipilih berada di luar garis batas wilayah administrasi desa yang dipilih.
+                Pastikan anda sudah yakin dengan titik koordinat yang dipilih.
+              </p>
+            </div>
+          )}
+
+          {/* Outside Muara Enim kabupaten warning */}
+          {!isInsideMuaraEnim(latitude, longitude) && (
+            <div className="flex items-start gap-2 p-2.5 rounded-lg border border-red-300 bg-red-50 text-xs text-red-800">
+              <TriangleAlert size={14} className="shrink-0 mt-0.5 text-red-500" />
+              <p>
+                <strong>Peringatan:</strong> Titik koordinat berada di luar wilayah Kabupaten Muara Enim. Pastikan lokasi sudah benar.
+              </p>
+            </div>
+          )}
         </div>
       )}
 

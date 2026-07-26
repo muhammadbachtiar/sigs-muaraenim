@@ -11,12 +11,12 @@ export const sinyalSchema = z.object({
   teknologiId: z.string().uuid(),
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
-  rsrp: z.number().nullable().optional(),
-  rssi: z.number().nullable().optional(),
+  rsrp: z.number({ message: 'RSRP wajib diisi (angka)' }),
+  rssi: z.number({ message: 'RSSI wajib diisi (angka)' }),
   rsrq: z.number().nullable().optional(),
   snr: z.number().nullable().optional(),
   tanggalPengukuran: z.string().or(z.date()),
-  catatan: z.string().optional(),
+  catatan: z.string().nullable().optional(),
 })
 
 export const towerSchema = z.object({

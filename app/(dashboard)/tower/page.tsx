@@ -7,10 +7,11 @@ import {
   TowerControl, Plus, Search, MapPin, Map, Pencil, CheckCircle2, AlertCircle,
   XCircle, Clock, Eye, Trash2, Camera, Upload, Loader2, RefreshCw,
   ShieldCheck, ArrowUpRight, FileText, Check, X, Building, Radio, Wifi, Network,
-  ImageIcon, Sparkles, AlertTriangle, LayoutGrid, List
+  ImageIcon, Sparkles, AlertTriangle, LayoutGrid, List, Save
 } from 'lucide-react'
 import { toast } from 'sonner'
 import dynamic from 'next/dynamic'
+import { saveDraft, updateDraft, getDraftsByType, getDraftById, deleteDraft, type Draft } from '@/lib/indexedDb'
 
 const TowerMap = dynamic(() => import('@/components/map/TowerMap'), {
   ssr: false,
@@ -38,6 +39,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import SearchableSelect from '@/components/ui/searchable-select'
+import { scrollToFirstError } from '@/lib/scroll-to-error'
+import { detectDesaFromCoords } from '@/lib/spatial-helpers'
 
 // --- CONSTANTS ---
 
@@ -90,6 +93,14 @@ type DesaOption = {
 }
 
 type TowerMapForDuplicate = { id: string; namaTower: string; latitude: number; longitude: number }
+
+type TowerFormErrors = {
+  namaTower?: string
+  kecamatanId?: string
+  desaKelurahanId?: string
+  latitude?: string
+  longitude?: string
+}
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371
@@ -163,6 +174,7 @@ function TowerPage() {
   const [formPhotos, setFormPhotos] = useState<File[]>([])
 
   const [formError, setFormError] = useState('')
+  const [formErrors, setFormErrors] = useState<TowerFormErrors>({})
   const [submitting, setSubmitting] = useState(false)
   const [formCoordMode, setFormCoordMode] = useState<'none' | 'map' | 'manual'>('none')
   const [formGettingLocation, setFormGettingLocation] = useState(false)
@@ -176,7 +188,19 @@ function TowerPage() {
   const [uploadCaption, setUploadCaption] = useState('')
   const [uploading, setUploading] = useState(false)
 
+  // Draft States for Tower Form
+  const [existingTowerDraft, setExistingTowerDraft] = useState<Draft | null>(null)
+  const [activeTowerDraftId, setActiveTowerDraftId] = useState<number | null>(null)
+  const [showTowerDraftConfirmModal, setShowTowerDraftConfirmModal] = useState(false)
+  const [savingTowerDraft, setSavingTowerDraft] = useState(false)
+
+  // Map focus center — updated when user picks kec/desa (so map flies to that area)
+  const [mapFocusCenter, setMapFocusCenter] = useState<[number, number] | null>(null)
+  // Whether auto-detection of desa from coords is in progress
+  const [detectingDesaFromCoords, setDetectingDesaFromCoords] = useState(false)
+
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const coordDetectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const formLatNum = formLat ? parseFloat(formLat) : null
   const formLngNum = formLng ? parseFloat(formLng) : null
@@ -193,6 +217,72 @@ function TowerPage() {
   }, [formLatNum, formLngNum, allTowersForDuplicate, activeTower])
 
   const photoCountWarning = !activeTower && formPhotos.length < 2
+
+  // --- AUTO-DETECT DESA/KEC FROM MANUALLY-TYPED COORDINATES ---
+  // When user types lat/lng and hasn't selected kec/desa yet, detect them automatically after 700ms
+  useEffect(() => {
+    if (coordDetectTimer.current) clearTimeout(coordDetectTimer.current)
+    const lat = parseFloat(formLat)
+    const lng = parseFloat(formLng)
+    if (isNaN(lat) || isNaN(lng) || !formLat || !formLng) return
+    // Only auto-detect if kecamatan or desa is not yet filled
+    if (formKecId && formDesaId) return
+    coordDetectTimer.current = setTimeout(async () => {
+      setDetectingDesaFromCoords(true)
+      try {
+        const detected = await detectDesaFromCoords(lat, lng)
+        if (!detected) return
+        // Match against allDesas from DB by name
+        const foundDesa = allDesas.find(
+          d => d.nama.toLowerCase().trim() === detected.desaNama.toLowerCase().trim()
+        )
+        if (!foundDesa) return
+        const kecId = foundDesa.kecamatanId || (foundDesa as any).kecamatan?.id
+        if (!formKecId && kecId) {
+          setFormKecId(kecId)
+          fetchFormDesas(kecId)
+        }
+        if (!formDesaId && foundDesa.id) {
+          setFormDesaId(foundDesa.id)
+        }
+        toast.info(`Wilayah terdeteksi: ${detected.desaNama} (${detected.kecamatanNama})`, { id: 'coord-detect' })
+      } catch {
+        // ignore
+      } finally {
+        setDetectingDesaFromCoords(false)
+      }
+    }, 700)
+    return () => { if (coordDetectTimer.current) clearTimeout(coordDetectTimer.current) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formLat, formLng])
+
+  // --- FOCUS MAP ON SELECTED KEC/DESA ---
+  // When user picks a desa/kecamatan first (before placing the pin),
+  // derive a focus center from the desa's lat/lng or the kecamatan's first desa center
+  useEffect(() => {
+    // If coordinates are already placed, don't override (user can see their own pin)
+    if (formLat && formLng) return
+
+    if (formDesaId) {
+      const selectedDesa = allDesas.find(d => d.id === formDesaId) as any
+      if (selectedDesa?.latitude != null && selectedDesa?.longitude != null) {
+        setMapFocusCenter([Number(selectedDesa.latitude), Number(selectedDesa.longitude)])
+        return
+      }
+    }
+    if (formKecId && !formDesaId) {
+      // Use center of first desa in that kecamatan that has coords
+      const firstDesaWithCoords = allDesas.find(
+        d => d.kecamatanId === formKecId && (d as any).latitude != null && (d as any).longitude != null
+      ) as any
+      if (firstDesaWithCoords) {
+        setMapFocusCenter([Number(firstDesaWithCoords.latitude), Number(firstDesaWithCoords.longitude)])
+        return
+      }
+    }
+    // No desa/kec selected or no coords available
+    setMapFocusCenter(null)
+  }, [formDesaId, formKecId, allDesas, formLat, formLng])
 
   // --- FETCH MASTER DATA ON MOUNT ---
   useEffect(() => {
@@ -221,6 +311,18 @@ function TowerPage() {
         .then(res => { if (res.success) setAllMedia(res.data) })
         .catch(err => console.error(err))
 
+      // Fetch All Desas
+      fetch('/api/master/desa?is_select=true')
+        .then(r => r.json())
+        .then(res => {
+          if (res.success) {
+            setAllDesas(res.data)
+            setFilterDesas(res.data)
+            setFormDesas(res.data)
+          }
+        })
+        .catch(err => console.error(err))
+
       fetch('/api/tower?for_map=true')
         .then(r => r.json())
         .then(res => { if (res.success) setAllTowersForDuplicate(res.data) })
@@ -228,18 +330,14 @@ function TowerPage() {
     }
   }, [status])
 
-  // Fetch desas when filter kecamatan changes
+  // Filter desas when filter kecamatan changes
   useEffect(() => {
-    if (filterKecId) {
-      fetch(`/api/master/desa?is_select=true&kecamatan_id=${filterKecId}`)
-        .then(r => r.json())
-        .then(res => { if (res.success) setFilterDesas(res.data) })
-        .catch(err => console.error(err))
+    if (filterKecId && allDesas.length > 0) {
+      setFilterDesas(allDesas.filter(d => d.kecamatanId === filterKecId))
     } else {
-      setFilterDesas([])
-      setFilterDesaId('')
+      setFilterDesas(allDesas)
     }
-  }, [filterKecId])
+  }, [filterKecId, allDesas])
 
   // Helper: Fetch desas for form modal
   const fetchFormDesas = async (kecId: string) => {
@@ -311,7 +409,7 @@ function TowerPage() {
   }
 
   // --- FORM RESET HELPER ---
-  const resetForm = () => {
+  const handleOpenAddForm = () => {
     setActiveTower(null)
     setFormNama('')
     setFormTinggi('')
@@ -324,9 +422,22 @@ function TowerPage() {
     setSelectedTekIds([])
     setSelectedMediaIds([])
     setFormPhotos([])
-    setFormDesas([])
     setFormError('')
+    setFormErrors({})
     setFormCoordMode('none')
+    setShowTowerMapPicker(false)
+    setActiveTowerDraftId(null)
+
+    // Check IndexedDB for saved tower draft
+    getDraftsByType('tower').then(drafts => {
+      if (drafts.length > 0) {
+        setExistingTowerDraft(drafts[0])
+      } else {
+        setExistingTowerDraft(null)
+      }
+    }).catch(() => {})
+
+    setShowFormModal(true)
   }
 
   const handleFormGetLocation = () => {
@@ -349,21 +460,34 @@ function TowerPage() {
 
   // --- OPEN MODAL HANDLERS ---
   const openAddModal = () => {
-    resetForm()
-    setShowFormModal(true)
+    handleOpenAddForm()
   }
 
-  // Auto-open form from shortcut (?action=create)
+  // Auto-open form from shortcut (?action=create&draftId=123)
   const searchParams = useSearchParams()
   useEffect(() => {
     if (searchParams.get('action') === 'create') {
-      openAddModal()
+      const draftId = searchParams.get('draftId')
+      if (draftId) {
+        getDraftById(Number(draftId)).then(draft => {
+          if (draft && draft.data) {
+            handleOpenAddForm()
+            handleApplyTowerDraft(draft)
+          } else {
+            openAddModal()
+          }
+        }).catch(() => openAddModal())
+      } else {
+        openAddModal()
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
   const openEditModal = async (tower: TowerItem) => {
     setActiveTower(tower)
+    setFormError('')
+    setFormErrors({})
     setFormNama(tower.namaTower)
     setFormTinggi(tower.tinggiKategori || '')
     setFormKecId(tower.kecamatan?.id || '')
@@ -437,21 +561,121 @@ function TowerPage() {
     setTarget(prev => [...prev, ...validFiles])
   }
 
-  // --- SUBMIT HANDLERS ---
+  // Dirty check for Tower Form
+  const isTowerFormDirty = useCallback(() => {
+    if (activeTower) return false
+    return !!(
+      formNama.trim() ||
+      formKecId ||
+      formDesaId ||
+      formLat ||
+      formLng ||
+      formDeskripsi.trim() ||
+      selectedOpIds.length > 0 ||
+      selectedTekIds.length > 0 ||
+      formPhotos.length > 0
+    )
+  }, [activeTower, formNama, formKecId, formDesaId, formLat, formLng, formDeskripsi, selectedOpIds, selectedTekIds, formPhotos])
+
+  const handleAttemptCloseTowerForm = () => {
+    if (isTowerFormDirty()) {
+      setShowTowerDraftConfirmModal(true)
+    } else {
+      setShowFormModal(false)
+    }
+  }
+
+  const handleApplyTowerDraft = (draft: Draft) => {
+    if (draft.data) {
+      const d = draft.data
+      if (d.namaTower) setFormNama(d.namaTower)
+      if (d.tinggiKategori) setFormTinggi(d.tinggiKategori)
+      if (d.kecamatanId) {
+        setFormKecId(d.kecamatanId)
+        fetchFormDesas(d.kecamatanId)
+      }
+      if (d.desaKelurahanId) setFormDesaId(d.desaKelurahanId)
+      if (d.latitude != null) setFormLat(String(d.latitude))
+      if (d.longitude != null) setFormLng(String(d.longitude))
+      if (d.deskripsiLokasi) setFormDeskripsi(d.deskripsiLokasi)
+      if (Array.isArray(d.operatorIds)) setSelectedOpIds(d.operatorIds)
+      if (Array.isArray(d.teknologiIds)) setSelectedTekIds(d.teknologiIds)
+      if (Array.isArray(d.mediaIds)) setSelectedMediaIds(d.mediaIds)
+
+      setActiveTowerDraftId(draft.id!)
+      setExistingTowerDraft(null)
+      toast.info('Draf pengajuan tower berhasil dimuat ke form')
+    }
+  }
+
+  const handleSaveTowerDraft = async () => {
+    setSavingTowerDraft(true)
+    try {
+      const draftPayload = {
+        namaTower: formNama.trim(),
+        tinggiKategori: formTinggi || null,
+        kecamatanId: formKecId,
+        desaKelurahanId: formDesaId || null,
+        latitude: formLatNum,
+        longitude: formLngNum,
+        deskripsiLokasi: formDeskripsi.trim() || null,
+        operatorIds: selectedOpIds,
+        teknologiIds: selectedTekIds,
+        mediaIds: selectedMediaIds,
+      }
+
+      const label = formNama.trim() || 'Draf Pengajuan Tower Baru'
+
+      if (activeTowerDraftId) {
+        await updateDraft({
+          id: activeTowerDraftId,
+          type: 'tower',
+          data: draftPayload,
+          createdAt: new Date().toISOString(),
+          wasOffline: !navigator.onLine,
+          label,
+        })
+        toast.success('Draf pengajuan tower berhasil diperbarui ke Draf Lokal')
+      } else {
+        await saveDraft({
+          type: 'tower',
+          data: draftPayload,
+          createdAt: new Date().toISOString(),
+          wasOffline: !navigator.onLine,
+          label,
+        })
+        toast.success('Draf pengajuan tower berhasil disimpan. Anda dapat melanjutkannya dari menu Draf.')
+      }
+      setShowTowerDraftConfirmModal(false)
+      setShowFormModal(false)
+    } catch {
+      toast.error('Gagal menyimpan draf tower')
+    } finally {
+      setSavingTowerDraft(false)
+    }
+  }
   const handleSaveTower = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!formNama.trim()) return setFormError('Nama tower wajib diisi')
-    if (!formKecId) return setFormError('Kecamatan lokasi wajib dipilih')
+
+    const errors: TowerFormErrors = {}
+    if (!formNama.trim()) errors.namaTower = 'Nama tower wajib diisi'
+    if (!formKecId) errors.kecamatanId = 'Kecamatan lokasi wajib dipilih'
 
     const latNum = parseFloat(formLat)
     const lngNum = parseFloat(formLng)
-    if (isNaN(latNum) || latNum < -90 || latNum > 90) {
-      return setFormError('Koordinat Latitude tidak valid (-90 s/d 90)')
-    }
-    if (isNaN(lngNum) || lngNum < -180 || lngNum > 180) {
-      return setFormError('Koordinat Longitude tidak valid (-180 s/d 180)')
+    if (!formLat) errors.latitude = 'Latitude wajib diisi'
+    else if (isNaN(latNum) || latNum < -90 || latNum > 90) errors.latitude = 'Latitude harus angka antara -90 dan 90'
+
+    if (!formLng) errors.longitude = 'Longitude wajib diisi'
+    else if (isNaN(lngNum) || lngNum < -180 || lngNum > 180) errors.longitude = 'Longitude harus angka antara -180 dan 180'
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors)
+      scrollToFirstError('[role="dialog"]')
+      return
     }
 
+    setFormErrors({})
     setFormError('')
     setSubmitting(true)
 
@@ -495,7 +719,6 @@ function TowerPage() {
 
         toast.success(res.message || (activeTower ? 'Tower berhasil diperbarui' : 'Tower berhasil diajukan'))
         setShowFormModal(false)
-        resetForm()
         fetchTowers(searchQuery, page, statusFilter, filterKecId, filterDesaId)
       } else {
         setFormError(res.message)
@@ -1234,7 +1457,7 @@ function TowerPage() {
       {/* ==========================================================
           ─── MODAL: FORM TAMBAH / EDIT TOWER (MULTIPLE PHOTO & STATIC SELECT) ───
           ========================================================== */}
-      <Dialog open={showFormModal} onOpenChange={setShowFormModal}>
+      <Dialog open={showFormModal} onOpenChange={(v) => !v && handleAttemptCloseTowerForm()}>
         <DialogContent className="sm:max-w-[620px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1245,6 +1468,40 @@ function TowerPage() {
               Isi spesifikasi teknis, wilayah, serta koordinat lokasi pendirian tower telekomunikasi.
             </DialogDescription>
           </DialogHeader>
+
+          {/* Draft Restoration Alert Banner */}
+          {existingTowerDraft && (
+            <div className="flex items-center justify-between p-3 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 text-xs text-amber-800 dark:text-amber-300">
+              <div className="flex items-center gap-2 truncate">
+                <FileText size={15} className="shrink-0 text-amber-600" />
+                <span className="truncate">
+                  Draf tersimpan: <strong>{existingTowerDraft.label}</strong> ({new Date(existingTowerDraft.createdAt).toLocaleDateString('id-ID')})
+                </span>
+              </div>
+              <div className="flex items-center gap-1 shrink-0 ml-2">
+                <button
+                  type="button"
+                  onClick={() => handleApplyTowerDraft(existingTowerDraft)}
+                  className="px-2 py-1 rounded bg-amber-600 text-white hover:bg-amber-700 font-semibold transition-colors text-[11px]"
+                >
+                  Gunakan Draf
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    deleteDraft(existingTowerDraft.id!).then(() => {
+                      setExistingTowerDraft(null)
+                      toast.info('Draf dihapus')
+                    })
+                  }}
+                  className="p-1 text-muted-foreground hover:text-destructive"
+                  title="Abaikan & hapus draf ini"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Rejection Alert Banner if editing REJECTED tower */}
           {activeTower && activeTower.statusVerifikasi === 'REJECTED' && (
@@ -1273,8 +1530,13 @@ function TowerPage() {
                   id="form-nama"
                   placeholder="Contoh: Tower BTS Babat Siku"
                   value={formNama}
-                  onChange={(e) => setFormNama(e.target.value)}
+                  onChange={(e) => {
+                    setFormNama(e.target.value)
+                    if (formErrors.namaTower) setFormErrors(prev => ({ ...prev, namaTower: undefined }))
+                  }}
+                  className={formErrors.namaTower ? 'border-red-400 ring-1 ring-red-200' : ''}
                 />
+                {formErrors.namaTower && <p className="text-xs text-red-500 mt-1">{formErrors.namaTower}</p>}
               </div>
 
               {/* Static Select Ketinggian Tower */}
@@ -1308,22 +1570,39 @@ function TowerPage() {
                       setFormKecId(val)
                       setFormDesaId('')
                       fetchFormDesas(val)
+                      if (formErrors.kecamatanId) setFormErrors(prev => ({ ...prev, kecamatanId: undefined }))
                     }}
                     placeholder="-- Pilih Kecamatan --"
                     searchPlaceholder="Cari kecamatan..."
                   />
+                  {formErrors.kecamatanId && <p className="text-xs text-red-500 mt-1">{formErrors.kecamatanId}</p>}
                 </div>
 
                 <div className="space-y-1.5">
                   <Label htmlFor="form-desa">Desa/Kelurahan</Label>
                   <SearchableSelect
                     id="form-desa"
-                    options={formDesas.map(d => ({ value: d.id, label: d.nama }))}
+                    options={(formKecId ? formDesas : allDesas).map(d => ({
+                      value: d.id,
+                      label: formKecId
+                        ? d.nama
+                        : `${allKecamatans.find(k => k.id === d.kecamatanId)?.nama || 'Desa'} / ${d.nama}`
+                    }))}
                     value={formDesaId}
-                    onChange={setFormDesaId}
-                    placeholder={formDesasLoading ? 'Memuat desa...' : '-- Pilih Desa --'}
+                    onChange={(val) => {
+                      setFormDesaId(val)
+                      // If desa selected directly without kecamatan, auto-fill kecamatan
+                      if (val && !formKecId) {
+                        const matchedDesa = allDesas.find(d => d.id === val)
+                        const kecId = matchedDesa?.kecamatanId || (matchedDesa as any)?.kecamatan?.id
+                        if (kecId) {
+                          setFormKecId(kecId)
+                          fetchFormDesas(kecId)
+                        }
+                      }
+                    }}
+                    placeholder={formDesasLoading ? 'Memuat desa...' : '-- Pilih / Cari Desa --'}
                     searchPlaceholder="Cari desa..."
-                    disabled={!formKecId || formDesasLoading}
                   />
                 </div>
               </div>
@@ -1365,8 +1644,13 @@ function TowerPage() {
               {/* Form Tulis Manual — SELALU DITAMPILKAN */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label htmlFor="form-lat" className="text-[11px] text-muted-foreground">
+                  <Label htmlFor="form-lat" className="text-[11px] text-muted-foreground flex items-center gap-1.5">
                     Latitude (Lintang) <span className="text-destructive">*</span>
+                    {detectingDesaFromCoords && (
+                      <span className="flex items-center gap-1 text-primary font-medium">
+                        <Loader2 size={10} className="animate-spin" /> Mendeteksi wilayah...
+                      </span>
+                    )}
                   </Label>
                   <Input
                     id="form-lat"
@@ -1374,9 +1658,13 @@ function TowerPage() {
                     step="any"
                     placeholder="-3.654321"
                     value={formLat}
-                    onChange={(e) => setFormLat(e.target.value)}
-                    className="text-xs font-mono"
+                    onChange={(e) => {
+                      setFormLat(e.target.value)
+                      if (formErrors.latitude) setFormErrors(prev => ({ ...prev, latitude: undefined }))
+                    }}
+                    className={`text-xs font-mono ${formErrors.latitude ? 'border-red-400 ring-1 ring-red-200' : ''}`}
                   />
+                  {formErrors.latitude && <p className="text-xs text-red-500 mt-1">{formErrors.latitude}</p>}
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="form-lng" className="text-[11px] text-muted-foreground">
@@ -1388,9 +1676,13 @@ function TowerPage() {
                     step="any"
                     placeholder="103.789012"
                     value={formLng}
-                    onChange={(e) => setFormLng(e.target.value)}
-                    className="text-xs font-mono"
+                    onChange={(e) => {
+                      setFormLng(e.target.value)
+                      if (formErrors.longitude) setFormErrors(prev => ({ ...prev, longitude: undefined }))
+                    }}
+                    className={`text-xs font-mono ${formErrors.longitude ? 'border-red-400 ring-1 ring-red-200' : ''}`}
                   />
+                  {formErrors.longitude && <p className="text-xs text-red-500 mt-1">{formErrors.longitude}</p>}
                 </div>
               </div>
 
@@ -1444,6 +1736,21 @@ function TowerPage() {
                       selectedDesaNama={selectedDesa?.nama}
                       selectedKecamatanNama={selectedKec?.nama}
                       userRole={isSuperAdmin ? 'SUPER_ADMIN' : 'PEMDES'}
+                      onAutoDetectDesa={(desaNama, kecNama) => {
+                        const foundDesa = allDesas.find(d => d.nama.toLowerCase().trim() === desaNama.toLowerCase().trim())
+                        if (foundDesa) {
+                          setFormDesaId(foundDesa.id)
+                          const matchedKec = allKecamatans.find(k => k.id === foundDesa.kecamatanId || k.id === (foundDesa as any).kecamatan?.id)
+                          if (matchedKec) {
+                            setFormKecId(matchedKec.id)
+                            fetchFormDesas(matchedKec.id)
+                          }
+                          toast.info(`Desa ${foundDesa.nama} (${kecNama}) terdeteksi otomatis dari koordinat`)
+                        }
+                      }}
+                      desaCenterLat={(selectedDesa as any)?.latitude}
+                      desaCenterLng={(selectedDesa as any)?.longitude}
+                      focusCenter={mapFocusCenter}
                     />
                   </div>
                 )
@@ -1623,13 +1930,59 @@ function TowerPage() {
             {formError && <p className="text-xs text-destructive font-medium">{formError}</p>}
 
             <DialogFooter className="gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setShowFormModal(false)}>Batal</Button>
+              <Button type="button" variant="outline" onClick={handleAttemptCloseTowerForm}>Batal</Button>
               <Button type="submit" disabled={submitting}>
                 {submitting && <Loader2 size={14} className="mr-1.5 animate-spin" />}
                 {activeTower ? 'Simpan Perubahan' : 'Kirim Pengajuan'}
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmation Modal when closing Tower form with unsaved data */}
+      <Dialog open={showTowerDraftConfirmModal} onOpenChange={setShowTowerDraftConfirmModal}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader className="space-y-2">
+            <DialogTitle className="flex items-center gap-2 text-amber-600 font-bold text-base">
+              <Save size={18} /> Simpan sebagai Draf?
+            </DialogTitle>
+            <DialogDescription className="text-sm leading-relaxed">
+              Data pengajuan tower yang Anda isi belum dikirim. Simpan sebagai
+              {' '}<strong className="text-foreground">Draf Lokal</strong>{' '}
+              agar bisa dilanjutkan nanti?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-2 pt-2">
+            <Button
+              type="button"
+              onClick={handleSaveTowerDraft}
+              disabled={savingTowerDraft}
+              className="w-full gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold h-10"
+            >
+              {savingTowerDraft ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+              Simpan ke Draf
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowTowerDraftConfirmModal(false)}
+              className="w-full h-10"
+            >
+              Lanjutkan Mengisi
+            </Button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowTowerDraftConfirmModal(false)
+                setShowFormModal(false)
+              }}
+              className="text-xs text-muted-foreground hover:text-destructive text-center py-1 transition-colors"
+            >
+              Tutup tanpa menyimpan
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -1785,9 +2138,27 @@ function TowerPage() {
                     </div>
                   </div>
                   <div>
-                    <div className="text-xs text-muted-foreground">Koordinat (Lat, Lng)</div>
-                    <div className="font-mono text-xs text-foreground font-semibold">
-                      {detailTower.latitude}, {detailTower.longitude}
+                    <div className="text-xs text-muted-foreground mb-0.5">Koordinat (Lat, Lng)</div>
+                    <div className="font-mono text-xs text-foreground font-semibold flex items-center gap-2 flex-wrap">
+                      <span>{detailTower.latitude}, {detailTower.longitude}</span>
+                      <a
+                        href={`https://www.google.com/maps?q=${detailTower.latitude},${detailTower.longitude}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] font-sans font-medium text-blue-600 hover:text-blue-800 hover:underline bg-blue-50 px-2 py-0.5 rounded border border-blue-200"
+                        title="Buka lokasi di Google Maps"
+                      >
+                        <MapPin size={11} /> Google Maps
+                      </a>
+                      <a
+                        href={`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${detailTower.latitude},${detailTower.longitude}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] font-sans font-medium text-emerald-600 hover:text-emerald-800 hover:underline bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200"
+                        title="Buka Street View lokasi"
+                      >
+                        <Eye size={11} /> Street View
+                      </a>
                     </div>
                   </div>
                   <div>

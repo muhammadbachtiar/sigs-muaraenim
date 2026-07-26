@@ -78,8 +78,8 @@ export default function DashboardMap({ onSelectSinyalDetail, onSelectTowerDetail
         <div className="flex items-center border border-[var(--color-hairline)] rounded-lg p-0.5 bg-[var(--color-surface)] shadow-xs text-xs">
           {[
             { key: 'BOTH', label: 'Semua', icon: Layers },
-            { key: 'SINYAL', label: 'Sinyal Saja', icon: Signal },
-            { key: 'TOWER', label: 'Tower Saja', icon: TowerControl },
+            { key: 'SINYAL', label: 'Sinyal', icon: Signal },
+            { key: 'TOWER', label: 'Tower', icon: TowerControl },
           ].map((item) => {
             const Icon = item.icon
             const isActive = mode === item.key
@@ -88,11 +88,10 @@ export default function DashboardMap({ onSelectSinyalDetail, onSelectTowerDetail
                 key={item.key}
                 type="button"
                 onClick={() => setMode(item.key as ViewMode)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 font-medium rounded-md transition-all ${
-                  isActive
+                className={`flex items-center gap-1.5 px-3 py-1.5 font-medium rounded-md transition-all ${isActive
                     ? 'bg-[var(--color-primary)] text-white shadow-xs'
                     : 'text-muted-foreground hover:text-foreground'
-                }`}
+                  }`}
               >
                 <Icon size={13} />
                 {item.label}

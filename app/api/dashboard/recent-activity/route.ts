@@ -6,9 +6,10 @@ export async function GET() {
     const { user, error } = await requireAuth()
     if (error) return error
 
-    const desaFilter = user!.role === 'PEMDES' && user!.desaKelurahanId ? { desaKelurahanId: user!.desaKelurahanId } : {}
+    const isPemdes = user!.role === 'PEMDES' && !!user!.desaKelurahanId
+    const desaFilter = isPemdes ? { desaKelurahanId: user!.desaKelurahanId! } : {}
 
-    const [recentSinyal, recentTower] = await Promise.all([
+    const [recentSinyal, recentTower, recentDemografi] = await Promise.all([
       prisma.riwayatSinyal.findMany({
         where: desaFilter,
         take: 10,
@@ -21,17 +22,37 @@ export async function GET() {
         },
       }),
       prisma.tower.findMany({
+        where: isPemdes
+          ? { desaKelurahanId: user!.desaKelurahanId! }
+          : {},
         take: 10,
         orderBy: { createdAt: 'desc' },
         select: {
           id: true, namaTower: true, statusVerifikasi: true, createdAt: true,
           kecamatan: { select: { nama: true } },
+          desaKelurahan: { select: { nama: true } },
           user: { select: { nama: true } },
         },
       }),
+      // Include demografi updates for PEMDES
+      isPemdes
+        ? prisma.demografiDesa.findMany({
+            where: { desaKelurahanId: user!.desaKelurahanId! },
+            take: 5,
+            orderBy: { updatedAt: 'desc' },
+            select: {
+              desaKelurahanId: true,
+              updatedAt: true,
+              desaKelurahan: { select: { nama: true } },
+            },
+          })
+        : Promise.resolve([]),
     ])
 
-    return successResponse({ recentSinyal, recentTower }, 'Aktivitas terbaru berhasil diambil')
+    return successResponse(
+      { recentSinyal, recentTower, recentDemografi },
+      'Aktivitas terbaru berhasil diambil'
+    )
   } catch {
     return serverErrorResponse()
   }

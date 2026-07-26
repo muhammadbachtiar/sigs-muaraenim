@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import LeafletMapBase from './LeafletMapBase'
 import SinyalMarkers, { type SinyalMapItem } from './SinyalMarkers'
 import TowerMarkers, { type TowerMapItem } from './TowerMarkers'
+import MapBoundary from './MapBoundary'
 import MapLegend from './MapLegend'
 import { Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
@@ -73,6 +74,7 @@ export default function DesaDetailMap({ desaId, desaNama, latitude, longitude }:
         )}
 
         <LeafletMapBase center={center} zoom={hasCenter ? 13 : 10} height="320px">
+          <MapBoundary selectedDesaNama={desaNama} />
           {hasCenter && (
             <Marker position={[latitude, longitude]} icon={desaPinIcon}>
               <Popup>

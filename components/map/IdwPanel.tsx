@@ -5,11 +5,12 @@ import { useMapEvents } from 'react-leaflet'
 import {
   Brain, Crosshair, ChevronDown, ChevronUp, Loader2, X,
   Info, Sliders, TriangleAlert, Save, LayoutGrid, Target,
-  CheckCircle2, HelpCircle,
+  CheckCircle2, HelpCircle, Maximize2, Minimize2, Plus,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { IdwGridCell } from '@/lib/idw'
 import type { IdwPredictionPoint } from './IdwMarker'
+import SearchableSelect from '@/components/ui/searchable-select'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -26,7 +27,7 @@ type GridConfig = {
 }
 
 type Props = {
-  desaList?: Array<{ id: string; nama: string }>
+  desaList?: Array<{ id: string; nama: string; kecamatanId?: string; kecamatan?: { id?: string; nama: string } }>
   kecamatanList?: Array<{ id: string; nama: string }>
   operatorList?: Array<{ id: string; nama: string }>
   selectedOperatorId?: string
@@ -34,8 +35,11 @@ type Props = {
   onGridResult: (cells: IdwGridCell[], resolutionM: number, stats: any) => void
   onClearGrid: () => void
   onSavePoint?: (point: IdwPredictionPoint) => void
+  onOpenInputForm?: (data: { latitude: number; longitude: number; rsrp: number | null; rssi: number | null; rsrq: number | null; snr: number | null }) => void
   userRole?: string
   userDesaId?: string | null
+  onSelectKecamatan?: (id: string) => void
+  onSelectDesa?: (id: string) => void
 }
 
 // ─── Click Coordinate Capture ─────────────────────────────────────────────────
@@ -97,11 +101,15 @@ export default function IdwPanel({
   onGridResult,
   onClearGrid,
   onSavePoint,
+  onOpenInputForm,
   userRole,
   userDesaId,
+  onSelectKecamatan,
+  onSelectDesa,
 }: Props) {
   // State panel
   const [isMinimized, setIsMinimized] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
   const [activeTab, setActiveTab] = useState<'single' | 'grid'>('single')
   const [showInfoModal, setShowInfoModal] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
@@ -129,6 +137,14 @@ export default function IdwPanel({
     kecamatanId: undefined,
     resolutionM: 200,
   })
+
+  // Grid Mode: 'wilayah' (existing) or 'koordinat' (new)
+  const [gridMode, setGridMode] = useState<'wilayah' | 'koordinat'>('wilayah')
+  // Koordinat center & radius for koordinat mode
+  const [gridCenterLat, setGridCenterLat] = useState('')
+  const [gridCenterLng, setGridCenterLng] = useState('')
+  const [gridRadius, setGridRadius] = useState(3) // km
+  const [gridClickMode, setGridClickMode] = useState(false)
 
   // Loading states
   const [loadingSingle, setLoadingSingle] = useState(false)
@@ -201,9 +217,47 @@ export default function IdwPanel({
     }
   }
 
+  // Handle map click for grid center coordinate
+  const handleGridCoordCapture = useCallback((lat: number, lng: number) => {
+    setGridCenterLat(lat.toFixed(6))
+    setGridCenterLng(lng.toFixed(6))
+    setGridClickMode(false)
+    toast.info(`Titik pusat peta: ${lat.toFixed(5)}, ${lng.toFixed(5)}`)
+  }, [])
+
   const handleGridGenerate = async () => {
-    if (!gridConfig.desaKelurahanId && !gridConfig.kecamatanId) {
-      toast.error('Pilih Desa atau Kecamatan terlebih dahulu untuk generate peta area.')
+    let bodyPayload: Record<string, unknown>
+
+    const cLat = parseFloat(gridCenterLat)
+    const cLng = parseFloat(gridCenterLng)
+
+    // Priority 1: If Lat/Lng is entered, generate grid based on point + radius bbox
+    if (!isNaN(cLat) && !isNaN(cLng) && gridCenterLat.trim() && gridCenterLng.trim()) {
+      const degPerKm = 1 / 111.32
+      const latDelta = gridRadius * degPerKm
+      const lngDelta = gridRadius * degPerKm
+      bodyPayload = {
+        bbox: {
+          minLat: cLat - latDelta,
+          maxLat: cLat + latDelta,
+          minLng: cLng - lngDelta,
+          maxLng: cLng + lngDelta,
+        },
+        operatorId: selectedOperatorId || undefined,
+        resolutionM: gridConfig.resolutionM,
+        ...params,
+      }
+    } else if (gridConfig.desaKelurahanId || gridConfig.kecamatanId) {
+      // Priority 2: Generate grid based on selected Desa / Kecamatan boundary
+      bodyPayload = {
+        desaKelurahanId: gridConfig.desaKelurahanId,
+        kecamatanId: gridConfig.kecamatanId,
+        operatorId: selectedOperatorId || undefined,
+        resolutionM: gridConfig.resolutionM,
+        ...params,
+      }
+    } else {
+      toast.error('Pilih Kecamatan/Desa ATAU tentukan titik koordinat (Lat/Lng) untuk area grid.')
       return
     }
 
@@ -213,13 +267,7 @@ export default function IdwPanel({
       const res = await fetch('/api/sinyal/predict-idw-grid', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          desaKelurahanId: gridConfig.desaKelurahanId,
-          kecamatanId: gridConfig.kecamatanId,
-          operatorId: selectedOperatorId || undefined,
-          resolutionM: gridConfig.resolutionM,
-          ...params,
-        }),
+        body: JSON.stringify(bodyPayload),
       }).then((r) => r.json())
 
       if (!res.success) {
@@ -245,7 +293,18 @@ export default function IdwPanel({
   }
 
   const handleSave = () => {
-    if (lastResult && onSavePoint) {
+    if (!lastResult) return
+    // Prefer opening the full form for proper data entry (avoids validation errors)
+    if (onOpenInputForm) {
+      onOpenInputForm({
+        latitude: lastResult.latitude,
+        longitude: lastResult.longitude,
+        rsrp: lastResult.rsrp,
+        rssi: lastResult.rssi,
+        rsrq: lastResult.rsrq,
+        snr: lastResult.snr,
+      })
+    } else if (onSavePoint) {
       onSavePoint(lastResult)
     }
   }
@@ -255,6 +314,7 @@ export default function IdwPanel({
   return (
     <>
       <ClickCapture active={clickMode} onCoord={handleCoordCapture} />
+      <ClickCapture active={gridClickMode} onCoord={handleGridCoordCapture} />
 
       {/* Educational Modal */}
       {showInfoModal && <IdwInfoModal onClose={() => setShowInfoModal(false)} />}
@@ -282,6 +342,24 @@ export default function IdwPanel({
             <span className="text-xs font-bold tracking-tight">Analisis IDW</span>
           </div>
           <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                const mapContainer = document.querySelector('.leaflet-container')?.parentElement
+                if (mapContainer) {
+                  if (!isFullscreen) {
+                    mapContainer.requestFullscreen?.()
+                    setIsFullscreen(true)
+                  } else {
+                    document.exitFullscreen?.()
+                    setIsFullscreen(false)
+                  }
+                }
+              }}
+              className="p-1 rounded hover:bg-white/20 transition-colors"
+              title={isFullscreen ? 'Keluar Fullscreen' : 'Peta Layar Penuh'}
+            >
+              {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+            </button>
             <button
               onClick={() => setShowInfoModal(true)}
               className="p-1 rounded hover:bg-white/20 transition-colors"
@@ -425,14 +503,28 @@ export default function IdwPanel({
                         </div>
                       )}
 
-                      {onSavePoint && (
+                      {onOpenInputForm ? (
+                        <button
+                          onClick={() => onOpenInputForm({
+                            latitude: lastResult.latitude,
+                            longitude: lastResult.longitude,
+                            rsrp: lastResult.rsrp,
+                            rssi: lastResult.rssi,
+                            rsrq: lastResult.rsrq,
+                            snr: lastResult.snr,
+                          })}
+                          className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold shadow-xs transition-colors"
+                        >
+                          <Plus size={13} /> Input Sinyal di Titik Ini
+                        </button>
+                      ) : onSavePoint ? (
                         <button
                           onClick={handleSave}
                           className="w-full flex items-center justify-center gap-2 py-1.5 rounded-lg border-2 border-purple-200 hover:bg-purple-50 text-purple-700 text-xs font-semibold transition-colors"
                         >
                           <Save size={13} /> Simpan ke Riwayat Sinyal
                         </button>
-                      )}
+                      ) : null}
                     </div>
                   )}
                 </>
@@ -443,37 +535,135 @@ export default function IdwPanel({
                 <>
                   <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-[10px] text-amber-700 flex gap-1.5">
                     <Info size={12} className="mt-0.5 shrink-0" />
-                    Grid dihitung per wilayah. Semakin kecil resolusi sel, semakin lama proses. Dibatasi maks 2500 sel.
+                    Pilih wilayah (Kecamatan/Desa) untuk memfokuskan peta. Jika titik koordinat diisi, perhitungan IDW berpusat pada koordinat tersebut.
                   </div>
 
-                  {/* Pilih Area */}
-                  <div className="space-y-1.5">
+                  {/* Filter & Fokus Wilayah */}
+                  <div className="space-y-2 border-b border-[var(--color-hairline)] pb-2.5">
+                    <label className="text-[11px] font-bold text-gray-700 dark:text-gray-300 block">
+                      Wilayah Area
+                    </label>
                     {userRole === 'SUPER_ADMIN' && kecamatanList.length > 0 && (
                       <div>
-                        <label className="text-[11px] font-semibold text-gray-700 block mb-0.5">Kecamatan</label>
-                        <select
+                        <label className="text-[10px] font-medium text-gray-500 block mb-1">Kecamatan</label>
+                        <SearchableSelect
+                          options={kecamatanList.map(k => ({ value: k.id, label: k.nama }))}
                           value={gridConfig.kecamatanId ?? ''}
-                          onChange={(e) => setGridConfig(c => ({ ...c, kecamatanId: e.target.value || undefined, desaKelurahanId: undefined }))}
-                          className="w-full text-xs px-2 py-1.5 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-surface)] focus:outline-none focus:ring-1 focus:ring-purple-400"
-                        >
-                          <option value="">-- Pilih Kecamatan --</option>
-                          {kecamatanList.map((k) => <option key={k.id} value={k.id}>{k.nama}</option>)}
-                        </select>
+                          onChange={val => {
+                            setGridConfig(c => ({
+                              ...c,
+                              kecamatanId: val || undefined,
+                              desaKelurahanId: undefined,
+                            }))
+                            if (onSelectKecamatan) onSelectKecamatan(val || '')
+                          }}
+                          placeholder="-- Pilih / Cari Kecamatan --"
+                          searchPlaceholder="Cari kecamatan..."
+                        />
                       </div>
                     )}
                     {desaList.length > 0 && (
                       <div>
-                        <label className="text-[11px] font-semibold text-gray-700 block mb-0.5">Desa</label>
-                        <select
+                        <label className="text-[10px] font-medium text-gray-500 block mb-1">Desa / Kelurahan</label>
+                        <SearchableSelect
+                          options={desaList
+                            .filter(d => !gridConfig.kecamatanId || d.kecamatanId === gridConfig.kecamatanId || (d.kecamatan as any)?.id === gridConfig.kecamatanId)
+                            .map(d => ({ value: d.id, label: gridConfig.kecamatanId ? d.nama : `${(d.kecamatan as any)?.nama || 'Desa'} / ${d.nama}` }))
+                          }
                           value={gridConfig.desaKelurahanId ?? ''}
-                          onChange={(e) => setGridConfig(c => ({ ...c, desaKelurahanId: e.target.value || undefined, kecamatanId: undefined }))}
-                          className="w-full text-xs px-2 py-1.5 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-surface)] focus:outline-none focus:ring-1 focus:ring-purple-400"
-                        >
-                          <option value="">-- Pilih Desa --</option>
-                          {desaList.map((d) => <option key={d.id} value={d.id}>{d.nama}</option>)}
-                        </select>
+                          onChange={val => {
+                            const matchedDesa = desaList.find(d => d.id === val)
+                            const kecId = matchedDesa?.kecamatanId || (matchedDesa?.kecamatan as any)?.id
+                            setGridConfig(c => ({
+                              ...c,
+                              desaKelurahanId: val || undefined,
+                              kecamatanId: kecId || c.kecamatanId,
+                            }))
+                            if (onSelectDesa) onSelectDesa(val || '')
+                          }}
+                          placeholder="-- Pilih / Cari Desa --"
+                          searchPlaceholder="Cari desa..."
+                        />
                       </div>
                     )}
+                  </div>
+
+                  {/* Titik Pusat Koordinat (Opsional) */}
+                  <div className="space-y-2 border-b border-[var(--color-hairline)] pb-2.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-gray-700 dark:text-gray-300">
+                        Titik Pusat Grid (Opsional)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setGridClickMode(!gridClickMode)
+                          toast.info(
+                            gridClickMode ? 'Mode klik dinonaktifkan.' : 'Klik di peta untuk menentukan titik pusat area IDW.',
+                            { duration: 2500 },
+                          )
+                        }}
+                        className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border transition-all ${
+                          gridClickMode
+                            ? 'bg-purple-100 text-purple-700 border-purple-300 font-bold animate-pulse'
+                            : 'text-gray-500 border-gray-200 hover:border-purple-300'
+                        }`}
+                      >
+                        <Crosshair size={11} />
+                        {gridClickMode ? 'Klik Peta...' : 'Klik di Peta'}
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-gray-400">
+                      Jika diisi, perhitungan IDW berpusat di koordinat ini. Jika kosong, menggunakan pusat Desa/Kecamatan terpilih.
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <div>
+                        <label className="text-[10px] text-gray-400 block mb-0.5">Latitude</label>
+                        <input
+                          type="number"
+                          value={gridCenterLat}
+                          onChange={(e) => setGridCenterLat(e.target.value)}
+                          placeholder="-3.75412"
+                          step="0.00001"
+                          className="w-full text-xs px-2 py-1.5 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-surface)] focus:outline-none focus:ring-1 focus:ring-purple-400 font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-gray-400 block mb-0.5">Longitude</label>
+                        <input
+                          type="number"
+                          value={gridCenterLng}
+                          onChange={(e) => setGridCenterLng(e.target.value)}
+                          placeholder="103.7423"
+                          step="0.00001"
+                          className="w-full text-xs px-2 py-1.5 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-surface)] focus:outline-none focus:ring-1 focus:ring-purple-400 font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Radius Area Slider */}
+                    <div className="space-y-1 pt-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-semibold text-gray-600 dark:text-gray-300">Radius Area Grid</label>
+                        <span className="text-[10px] font-mono font-bold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded">
+                          {gridRadius} km
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={1}
+                        max={10}
+                        step={0.5}
+                        value={gridRadius}
+                        onChange={(e) => setGridRadius(Number(e.target.value))}
+                        className="w-full h-1.5 accent-purple-600 cursor-pointer"
+                      />
+                      <div className="flex justify-between text-[9px] text-gray-400">
+                        <span>1 km</span>
+                        <span>10 km</span>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Resolusi Grid */}
@@ -507,7 +697,10 @@ export default function IdwPanel({
                   <div className="flex gap-2">
                     <button
                       onClick={handleGridGenerate}
-                      disabled={loadingGrid || (!gridConfig.desaKelurahanId && !gridConfig.kecamatanId)}
+                      disabled={
+                        loadingGrid ||
+                        (!gridConfig.desaKelurahanId && !gridConfig.kecamatanId && (!gridCenterLat || !gridCenterLng))
+                      }
                       className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-xs font-bold transition-colors"
                     >
                       {loadingGrid ? (

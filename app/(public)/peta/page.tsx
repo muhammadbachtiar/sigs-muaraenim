@@ -16,7 +16,7 @@ const PublicSinyalMap = dynamic(() => import('@/components/map/PublicSinyalMap')
   ),
 })
 
-type Option = { id: string; nama: string }
+type Option = { id: string; nama: string; kecamatanId?: string; kecamatan?: { id?: string; nama: string } }
 
 export default function PetaPublikPage() {
   const [kecamatanList, setKecamatanList] = useState<Option[]>([])
@@ -32,33 +32,32 @@ export default function PetaPublikPage() {
   const [showFilter, setShowFilter] = useState(false)
   const [loadingDesa, setLoadingDesa] = useState(false)
 
-  // Fetch Kecamatan & Operator on mount
+  const [allDesas, setAllDesas] = useState<Array<{ id: string; nama: string; kecamatanId?: string; kecamatan?: { id?: string; nama: string } }>>([])
+
+  // Fetch Kecamatan, Operator, and All Desas on mount
   useEffect(() => {
     Promise.all([
       fetch('/api/master/kecamatan?is_select=true').then(r => r.json()),
       fetch('/api/master/operator?is_select=true').then(r => r.json()),
-    ]).then(([kec, op]) => {
+      fetch('/api/master/desa?is_select=true').then(r => r.json()),
+    ]).then(([kec, op, desa]) => {
       if (kec.success) setKecamatanList(kec.data)
       if (op.success) setOperatorList(op.data)
+      if (desa.success) {
+        setAllDesas(desa.data)
+        setDesaList(desa.data)
+      }
     })
   }, [])
 
-  // Fetch Desa when Kecamatan changes
+  // Filter Desa when Kecamatan changes
   useEffect(() => {
     if (!selectedKecamatan) {
-      setDesaList([])
-      setSelectedDesa('')
-      return
+      setDesaList(allDesas)
+    } else {
+      setDesaList(allDesas.filter(d => d.kecamatanId === selectedKecamatan || d.kecamatan?.id === selectedKecamatan))
     }
-
-    setLoadingDesa(true)
-    fetch(`/api/master/desa?is_select=true&kecamatan_id=${selectedKecamatan}`)
-      .then(r => r.json())
-      .then(res => {
-        if (res.success) setDesaList(res.data)
-      })
-      .finally(() => setLoadingDesa(false))
-  }, [selectedKecamatan])
+  }, [selectedKecamatan, allDesas])
 
   const toggleOperator = (id: string) => {
     setSelectedOperators(prev =>
@@ -130,17 +129,20 @@ export default function PetaPublikPage() {
               Desa / Kelurahan <span className="text-red-500">*</span>
             </label>
             <SearchableSelect
-              disabled={!selectedKecamatan || loadingDesa}
-              options={desaList.map(d => ({ value: d.id, label: d.nama }))}
+              options={desaList.map(d => ({
+                value: d.id,
+                label: selectedKecamatan ? d.nama : `${d.kecamatan?.nama || 'Desa'} / ${d.nama}`
+              }))}
               value={selectedDesa}
-              onChange={setSelectedDesa}
-              placeholder={
-                !selectedKecamatan
-                  ? '— Pilih Kecamatan Dulu —'
-                  : loadingDesa
-                  ? 'Memuat desa...'
-                  : '— Pilih Desa/Kelurahan —'
-              }
+              onChange={(val) => {
+                setSelectedDesa(val)
+                if (val && !selectedKecamatan) {
+                  const matched = allDesas.find(d => d.id === val)
+                  const kecId = matched?.kecamatanId || matched?.kecamatan?.id
+                  if (kecId) setSelectedKecamatan(kecId)
+                }
+              }}
+              placeholder="— Pilih / Cari Desa/Kelurahan —"
               searchPlaceholder="Cari desa/kelurahan..."
             />
           </div>

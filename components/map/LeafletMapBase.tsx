@@ -16,11 +16,27 @@ type Props = {
 function MapResizer() {
   const map = useMap()
   useEffect(() => {
-    // Invalidate size on mount & window resize
-    const timer = setTimeout(() => {
-      map.invalidateSize()
-    }, 200)
-    return () => clearTimeout(timer)
+    // Multi-pass invalidateSize to handle hydration, dynamic import, & tab-switch glitches
+    const t1 = setTimeout(() => map.invalidateSize(), 100)
+    const t2 = setTimeout(() => map.invalidateSize(), 350)
+    const t3 = setTimeout(() => map.invalidateSize(), 700)
+
+    // ResizeObserver: auto-invalidate whenever the container changes size
+    let observer: ResizeObserver | null = null
+    const container = map.getContainer()
+    if (container && typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(() => {
+        map.invalidateSize()
+      })
+      observer.observe(container)
+    }
+
+    return () => {
+      clearTimeout(t1)
+      clearTimeout(t2)
+      clearTimeout(t3)
+      observer?.disconnect()
+    }
   }, [map])
   return null
 }

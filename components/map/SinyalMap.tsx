@@ -27,6 +27,7 @@ type Props = {
   kecamatanList?: Array<{ id: string; nama: string }>
   userRole?: string
   userDesaId?: string | null
+  onOpenInputForm?: (data: { latitude: number; longitude: number; rsrp: number | null; rssi: number | null; rsrq: number | null; snr: number | null }) => void
 }
 
 export default function SinyalMap({
@@ -44,6 +45,7 @@ export default function SinyalMap({
   kecamatanList = [],
   userRole,
   userDesaId,
+  onOpenInputForm,
 }: Props) {
   const [data, setData] = useState<SinyalMapItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -94,39 +96,21 @@ export default function SinyalMap({
     fetchData()
   }, [fetchData])
 
-  // Simpan hasil IDW ke riwayat sinyal
-  const handleSaveIdwResult = useCallback(async (point: IdwPredictionPoint) => {
-    setSavingResult(true)
-    try {
-      const res = await fetch('/api/sinyal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          latitude: point.latitude,
-          longitude: point.longitude,
-          rsrp: point.rsrp,
-          rssi: point.rssi,
-          rsrq: point.rsrq,
-          snr: point.snr,
-          // Simpan ke desa user jika ada, atau kosong
-          desaKelurahanId: userDesaId || undefined,
-          // Tandai sebagai estimasi IDW di catatan
-          catatan: `[IDW Estimasi] p=${point.params.p}, N=${point.neighborsUsed}, r=${point.params.radius}km`,
-          tanggalPengukuran: new Date().toISOString(),
-        }),
-      }).then((r) => r.json())
-
-      if (res.success) {
-        toast.success('Hasil prediksi IDW berhasil disimpan ke riwayat sinyal.')
-      } else {
-        toast.error(res.message || 'Gagal menyimpan data.')
-      }
-    } catch {
-      toast.error('Terjadi kesalahan saat menyimpan data.')
-    } finally {
-      setSavingResult(false)
+  // Simpan hasil IDW ke riwayat sinyal via modal SinyalFormDialog
+  const handleSaveIdwResult = useCallback((point: IdwPredictionPoint) => {
+    if (onOpenInputForm) {
+      onOpenInputForm({
+        latitude: point.latitude,
+        longitude: point.longitude,
+        rsrp: point.rsrp,
+        rssi: point.rssi,
+        rsrq: point.rsrq,
+        snr: point.snr,
+      })
+    } else {
+      toast.error('Form input sinyal tidak tersedia.')
     }
-  }, [userDesaId])
+  }, [onOpenInputForm])
 
   return (
     <div className="relative w-full">
@@ -176,8 +160,11 @@ export default function SinyalMap({
               }}
               onClearGrid={() => { setIdwGrid([]); setIdwGridStats(null) }}
               onSavePoint={handleSaveIdwResult}
+              onOpenInputForm={onOpenInputForm}
               userRole={userRole}
               userDesaId={userDesaId}
+              onSelectKecamatan={onSelectKecamatan}
+              onSelectDesa={onSelectDesa}
             />
           </>
         )}

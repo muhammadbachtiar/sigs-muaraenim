@@ -18,6 +18,7 @@ import { toast } from 'sonner'
 import { PAGE_SIZE_OPTIONS } from '@/lib/constants'
 import dynamic from 'next/dynamic'
 import SearchableSelect from '@/components/ui/searchable-select'
+import { getDraftById } from '@/lib/indexedDb'
 
 const SinyalMap = dynamic(() => import('@/components/map/SinyalMap'), {
   ssr: false,
@@ -83,14 +84,60 @@ function SinyalPageInner() {
   const [detailLoading, setDetailLoading] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  // Auto-open form dari shortcut (?action=create)
+  // Auto-open form dari shortcut (?action=create&draftId=123)
   const searchParams = useSearchParams()
   useEffect(() => {
     if (searchParams.get('action') === 'create') {
-      setEditData(null)
-      setFormOpen(true)
+      const draftId = searchParams.get('draftId')
+      if (draftId) {
+        getDraftById(Number(draftId)).then(draft => {
+          if (draft && draft.data) {
+            setEditData({
+              id: '',
+              desaKelurahanId: draft.data.desaKelurahanId || '',
+              operatorId: draft.data.operatorId || '',
+              teknologiId: draft.data.teknologiId || '',
+              latitude: draft.data.latitude || 0,
+              longitude: draft.data.longitude || 0,
+              rsrp: draft.data.rsrp,
+              rssi: draft.data.rssi,
+              rsrq: draft.data.rsrq,
+              snr: draft.data.snr,
+              tanggalPengukuran: draft.data.tanggalPengukuran || new Date().toISOString(),
+              catatan: draft.data.catatan || '',
+            })
+          } else {
+            setEditData(null)
+          }
+          setFormOpen(true)
+        }).catch(() => {
+          setEditData(null)
+          setFormOpen(true)
+        })
+      } else {
+        setEditData(null)
+        setFormOpen(true)
+      }
     }
   }, [searchParams])
+
+  const handleOpenInputFromIdw = (data: { latitude: number; longitude: number; rsrp: number | null; rssi: number | null; rsrq: number | null; snr: number | null }) => {
+    setEditData({
+      id: '',
+      desaKelurahanId: selectedDesa || userDesaId || '',
+      operatorId: selectedOperators[0] || '',
+      teknologiId: selectedTeknologi[0] || '',
+      latitude: data.latitude,
+      longitude: data.longitude,
+      rsrp: data.rsrp,
+      rssi: data.rssi,
+      rsrq: data.rsrq,
+      snr: data.snr,
+      tanggalPengukuran: new Date().toISOString(),
+      catatan: '[Estimasi IDW]',
+    })
+    setFormOpen(true)
+  }
 
   // Stats computed from current page + total
   const statsFromItems = {
@@ -100,401 +147,401 @@ function SinyalPageInner() {
     noData: items.filter(i => i.rsrp === null).length,
   }
 
-  const buildParams = useCallback(() => {
-    const p = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
-    if (selectedOperators.length) p.set('operator_id', selectedOperators.join(','))
-    if (selectedTeknologi.length) p.set('teknologi_id', selectedTeknologi.join(','))
-    if (selectedKecamatan) p.set('kecamatan_id', selectedKecamatan)
-    if (selectedDesa) p.set('desa_id', selectedDesa)
-    if (tanggalDari) p.set('tanggal_dari', tanggalDari)
-    if (tanggalSampai) p.set('tanggal_sampai', tanggalSampai)
-    return p
-  }, [page, pageSize, selectedOperators, selectedTeknologi, selectedKecamatan, selectedDesa, tanggalDari, tanggalSampai])
+const buildParams = useCallback(() => {
+  const p = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
+  if (selectedOperators.length) p.set('operator_id', selectedOperators.join(','))
+  if (selectedTeknologi.length) p.set('teknologi_id', selectedTeknologi.join(','))
+  if (selectedKecamatan) p.set('kecamatan_id', selectedKecamatan)
+  if (selectedDesa) p.set('desa_id', selectedDesa)
+  if (tanggalDari) p.set('tanggal_dari', tanggalDari)
+  if (tanggalSampai) p.set('tanggal_sampai', tanggalSampai)
+  return p
+}, [page, pageSize, selectedOperators, selectedTeknologi, selectedKecamatan, selectedDesa, tanggalDari, tanggalSampai])
 
-  const fetchData = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await fetch(`/api/sinyal?${buildParams()}`).then(r => r.json())
-      if (res.success) {
-        setItems(res.data)
-        setMeta(res.meta)
-      }
-    } catch {
-      toast.error('Gagal memuat data sinyal')
+const fetchData = useCallback(async () => {
+  setLoading(true)
+  try {
+    const res = await fetch(`/api/sinyal?${buildParams()}`).then(r => r.json())
+    if (res.success) {
+      setItems(res.data)
+      setMeta(res.meta)
     }
-    setLoading(false)
-  }, [buildParams])
-
-  useEffect(() => { fetchData() }, [fetchData])
-
-  useEffect(() => {
-    Promise.all([
-      fetch('/api/master/operator?page_size=50').then(r => r.json()),
-      fetch('/api/master/teknologi?page_size=50').then(r => r.json()),
-      fetch('/api/master/kecamatan?page_size=100').then(r => r.json()),
-      fetch('/api/master/desa?page_size=500').then(r => r.json()),
-    ]).then(([op, tek, kec, desa]) => {
-      if (op.success) setOperatorList(op.data)
-      if (tek.success) setTeknologiList(tek.data)
-      if (kec.success) setKecamatanList(kec.data)
-      if (desa.success) setDesaList(desa.data.map((d: any) => ({ id: d.id, nama: d.nama, kecamatanId: d.kecamatanId ?? d.kecamatan?.id })))
-    })
-  }, [])
-
-  const hasFilters = selectedOperators.length > 0 || selectedTeknologi.length > 0 || selectedKecamatan || selectedDesa || tanggalDari || tanggalSampai
-
-  const clearFilters = () => {
-    setSelectedOperators([])
-    setSelectedTeknologi([])
-    setSelectedKecamatan('')
-    setSelectedDesa('')
-    setTanggalDari('')
-    setTanggalSampai('')
-    setPage(1)
+  } catch {
+    toast.error('Gagal memuat data sinyal')
   }
+  setLoading(false)
+}, [buildParams])
 
-  const toggleMultiSelect = (id: string, selected: string[], setter: (v: string[]) => void) => {
-    setter(selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id])
-    setPage(1)
-  }
+useEffect(() => { fetchData() }, [fetchData])
 
-  const openDetail = async (item: SinyalItem | SinyalDetail) => {
-    setDetailData(item as SinyalDetail)
-    setDetailOpen(true)
-    setDetailLoading(true)
-    try {
-      const res = await fetch(`/api/sinyal/${item.id}`).then(r => r.json())
-      if (res.success) setDetailData(res.data)
-    } catch {}
-    setDetailLoading(false)
-  }
+useEffect(() => {
+  Promise.all([
+    fetch('/api/master/operator?page_size=50').then(r => r.json()),
+    fetch('/api/master/teknologi?page_size=50').then(r => r.json()),
+    fetch('/api/master/kecamatan?is_select=true').then(r => r.json()),
+    fetch('/api/master/desa?is_select=true').then(r => r.json()),
+  ]).then(([op, tek, kec, desa]) => {
+    if (op.success) setOperatorList(op.data)
+    if (tek.success) setTeknologiList(tek.data)
+    if (kec.success) setKecamatanList(kec.data)
+    if (desa.success) setDesaList(desa.data.map((d: any) => ({
+      id: d.id,
+      nama: d.nama,
+      kecamatanId: d.kecamatanId ?? d.kecamatan?.id,
+      kecamatan: d.kecamatan
+    })))
+  })
+}, [])
 
-  const openEdit = (item: SinyalItem | SinyalDetail) => {
-    setEditData({
-      id: item.id,
-      desaKelurahanId: item.desaKelurahan.id,
-      operatorId: item.operator.id,
-      teknologiId: item.teknologi.id,
-      latitude: item.latitude,
-      longitude: item.longitude,
-      rsrp: item.rsrp,
-      rssi: item.rssi,
-      rsrq: item.rsrq,
-      snr: item.snr,
-      tanggalPengukuran: item.tanggalPengukuran,
-      catatan: item.catatan,
-    })
-    setDetailOpen(false)
-    setFormOpen(true)
-  }
+const hasFilters = selectedOperators.length > 0 || selectedTeknologi.length > 0 || selectedKecamatan || selectedDesa || tanggalDari || tanggalSampai
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Yakin ingin menghapus data sinyal ini?')) return
-    setDeletingId(id)
-    try {
-      const res = await fetch(`/api/sinyal/${id}`, { method: 'DELETE' }).then(r => r.json())
-      if (res.success) {
-        toast.success('Data sinyal berhasil dihapus')
-        setDetailOpen(false)
-        fetchData()
-      } else {
-        toast.error(res.message)
-      }
-    } catch {
-      toast.error('Terjadi kesalahan jaringan')
+const clearFilters = () => {
+  setSelectedOperators([])
+  setSelectedTeknologi([])
+  setSelectedKecamatan('')
+  setSelectedDesa('')
+  setTanggalDari('')
+  setTanggalSampai('')
+  setPage(1)
+}
+
+const toggleMultiSelect = (id: string, selected: string[], setter: (v: string[]) => void) => {
+  setter(selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id])
+  setPage(1)
+}
+
+const openDetail = async (item: SinyalItem | SinyalDetail) => {
+  setDetailData(item as SinyalDetail)
+  setDetailOpen(true)
+  setDetailLoading(true)
+  try {
+    const res = await fetch(`/api/sinyal/${item.id}`).then(r => r.json())
+    if (res.success) setDetailData(res.data)
+  } catch { }
+  setDetailLoading(false)
+}
+
+const openEdit = (item: SinyalItem | SinyalDetail) => {
+  setEditData({
+    id: item.id,
+    desaKelurahanId: item.desaKelurahan.id,
+    operatorId: item.operator.id,
+    teknologiId: item.teknologi.id,
+    latitude: item.latitude,
+    longitude: item.longitude,
+    rsrp: item.rsrp,
+    rssi: item.rssi,
+    rsrq: item.rsrq,
+    snr: item.snr,
+    tanggalPengukuran: item.tanggalPengukuran,
+    catatan: item.catatan,
+  })
+  setDetailOpen(false)
+  setFormOpen(true)
+}
+
+const handleDelete = async (id: string) => {
+  if (!confirm('Yakin ingin menghapus data sinyal ini?')) return
+  setDeletingId(id)
+  try {
+    const res = await fetch(`/api/sinyal/${id}`, { method: 'DELETE' }).then(r => r.json())
+    if (res.success) {
+      toast.success('Data sinyal berhasil dihapus')
+      setDetailOpen(false)
+      fetchData()
+    } else {
+      toast.error(res.message)
     }
-    setDeletingId(null)
+  } catch {
+    toast.error('Terjadi kesalahan jaringan')
   }
+  setDeletingId(null)
+}
 
-  const canEditItem = (item: SinyalItem) =>
-    userRole === 'SUPER_ADMIN' || (userRole === 'PEMDES' && item.user?.id === userId)
+const canEditItem = (item: SinyalItem) =>
+  userRole === 'SUPER_ADMIN' || (userRole === 'PEMDES' && item.user?.id === userId)
 
-  const canDeleteItem = (item: SinyalItem) =>
-    userRole === 'SUPER_ADMIN' || (userRole === 'PEMDES' && item.user?.id === userId)
+const canDeleteItem = (item: SinyalItem) =>
+  userRole === 'SUPER_ADMIN' || (userRole === 'PEMDES' && item.user?.id === userId)
 
-  const filteredDesa = selectedKecamatan
-    ? desaList.filter(d => d.kecamatanId === selectedKecamatan)
-    : desaList
+const filteredDesa = selectedKecamatan
+  ? desaList.filter(d => d.kecamatanId === selectedKecamatan)
+  : desaList
 
-  const exportCsv = () => {
-    const p = buildParams()
-    p.set('page_size', '10000')
-    p.set('page', '1')
-    // Simple CSV export from current data (server-side export endpoint preferred for large data)
-    const headers = ['ID', 'Tanggal Ukur', 'Desa', 'Kecamatan', 'Operator', 'Teknologi', 'Latitude', 'Longitude', 'RSRP', 'RSSI', 'RSRQ', 'SNR', 'Catatan', 'Dibuat']
-    const rows = items.map(i => [
-      i.id, new Date(i.tanggalPengukuran).toLocaleDateString('id-ID'),
-      i.desaKelurahan.nama, i.desaKelurahan.kecamatan.nama,
-      i.operator.nama, i.teknologi.nama,
-      i.latitude, i.longitude, i.rsrp ?? '', i.rssi ?? '', i.rsrq ?? '', i.snr ?? '',
-      i.catatan ?? '', new Date(i.createdAt).toLocaleDateString('id-ID'),
-    ])
-    const csv = [headers, ...rows].map(r => r.join(',')).join('\n')
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `sinyal_${new Date().toISOString().slice(0, 10)}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-  }
+const exportCsv = () => {
+  const p = buildParams()
+  p.set('page_size', '10000')
+  p.set('page', '1')
+  // Simple CSV export from current data (server-side export endpoint preferred for large data)
+  const headers = ['ID', 'Tanggal Ukur', 'Desa', 'Kecamatan', 'Operator', 'Teknologi', 'Latitude', 'Longitude', 'RSRP', 'RSSI', 'RSRQ', 'SNR', 'Catatan', 'Dibuat']
+  const rows = items.map(i => [
+    i.id, new Date(i.tanggalPengukuran).toLocaleDateString('id-ID'),
+    i.desaKelurahan.nama, i.desaKelurahan.kecamatan.nama,
+    i.operator.nama, i.teknologi.nama,
+    i.latitude, i.longitude, i.rsrp ?? '', i.rssi ?? '', i.rsrq ?? '', i.snr ?? '',
+    i.catatan ?? '', new Date(i.createdAt).toLocaleDateString('id-ID'),
+  ])
+  const csv = [headers, ...rows].map(r => r.join(',')).join('\n')
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `sinyal_${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
-  return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      {/* Page Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-foreground tracking-tight flex items-center gap-2">
-            <Signal size={20} className="text-[var(--color-primary)]" />
-            Riwayat Sinyal
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {userRole === 'PEMDES'
-              ? 'Pencatatan kekuatan sinyal di wilayah desa Anda'
-              : 'Manajemen seluruh data pencatatan sinyal di Kabupaten Muara Enim'
-            }
-          </p>
+return (
+  <div className="space-y-6 animate-in fade-in duration-500">
+    {/* Page Header */}
+    <div className="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <h1 className="text-xl font-bold text-foreground tracking-tight flex items-center gap-2">
+          <Signal size={20} className="text-[var(--color-primary)]" />
+          Riwayat Sinyal
+        </h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          {userRole === 'PEMDES'
+            ? 'Pencatatan kekuatan sinyal di wilayah desa Anda'
+            : 'Manajemen seluruh data pencatatan sinyal di Kabupaten Muara Enim'
+          }
+        </p>
+      </div>
+      <div className="flex items-center gap-2">
+        {/* View Mode Switcher */}
+        <div className="flex items-center border border-[var(--color-hairline)] rounded-lg p-0.5 bg-[var(--color-surface)] shadow-xs">
+          <button
+            onClick={() => setViewMode('table')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${viewMode === 'table'
+              ? 'bg-[var(--color-primary)] text-white shadow-xs'
+              : 'text-muted-foreground hover:text-foreground'
+              }`}
+          >
+            <List size={14} /> Tabel
+          </button>
+          <button
+            onClick={() => setViewMode('map')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${viewMode === 'map'
+              ? 'bg-[var(--color-primary)] text-white shadow-xs'
+              : 'text-muted-foreground hover:text-foreground'
+              }`}
+          >
+            <Map size={14} /> Peta
+          </button>
+          <button
+            onClick={() => setViewMode('idw')}
+            title="Analisis prediksi sinyal dengan algoritma IDW"
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${viewMode === 'idw'
+              ? 'bg-purple-600 text-white shadow-xs'
+              : 'text-muted-foreground hover:text-foreground'
+              }`}
+          >
+            <Brain size={14} /> IDW
+          </button>
         </div>
-        <div className="flex items-center gap-2">
-          {/* View Mode Switcher */}
-          <div className="flex items-center border border-[var(--color-hairline)] rounded-lg p-0.5 bg-[var(--color-surface)] shadow-xs">
-            <button
-              onClick={() => setViewMode('table')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
-                viewMode === 'table'
-                  ? 'bg-[var(--color-primary)] text-white shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <List size={14} /> Tabel
-            </button>
-            <button
-              onClick={() => setViewMode('map')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
-                viewMode === 'map'
-                  ? 'bg-[var(--color-primary)] text-white shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <Map size={14} /> Peta
-            </button>
-            <button
-              onClick={() => setViewMode('idw')}
-              title="Analisis prediksi sinyal dengan algoritma IDW"
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
-                viewMode === 'idw'
-                  ? 'bg-purple-600 text-white shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <Brain size={14} /> IDW
-            </button>
-          </div>
 
-          <Button variant="outline" size="sm" onClick={exportCsv} className="gap-1.5 text-xs">
-            <Download size={14} /> Export CSV
+        <Button variant="outline" size="sm" onClick={exportCsv} className="gap-1.5 text-xs">
+          <Download size={14} /> Export CSV
+        </Button>
+        {(userRole === 'SUPER_ADMIN' || userRole === 'PEMDES') && (
+          <Button
+            size="sm"
+            onClick={() => { setEditData(null); setFormOpen(true) }}
+            className="gap-1.5 text-xs"
+          >
+            <Plus size={14} /> Input Sinyal
           </Button>
-          {(userRole === 'SUPER_ADMIN' || userRole === 'PEMDES') && (
-            <Button
-              size="sm"
-              onClick={() => { setEditData(null); setFormOpen(true) }}
-              className="gap-1.5 text-xs"
-            >
-              <Plus size={14} /> Input Sinyal
-            </Button>
+        )}
+      </div>
+    </div>
+
+    {/* Stats Strip */}
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {[
+        { label: 'Total (halaman ini)', value: items.length, color: '#0075de' },
+        { label: 'Sinyal Baik', value: statsFromItems.baik, color: '#22c55e' },
+        { label: 'Sinyal Sedang', value: statsFromItems.sedang, color: '#eab308' },
+        { label: 'Sinyal Buruk', value: statsFromItems.buruk, color: '#ef4444' },
+      ].map(s => (
+        <div
+          key={s.label}
+          className="flex flex-col px-4 py-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-surface)] shadow-soft"
+        >
+          <span className="text-xs text-muted-foreground">{s.label}</span>
+          <span className="text-xl font-bold mt-0.5" style={{ color: s.color }}>{s.value}</span>
+        </div>
+      ))}
+    </div>
+
+    {/* Filter & Search */}
+    <Card className="border-hairline shadow-soft">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex-1 min-w-[160px] relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            <span className="text-xs text-muted-foreground pl-9 py-2 block">Filter menggunakan panel di bawah</span>
+          </div>
+          <button
+            onClick={() => setShowFilter(prev => !prev)}
+            className={`flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border transition-colors ${showFilter || hasFilters
+              ? 'bg-[var(--color-primary-light)] text-[var(--color-primary)] border-[var(--color-primary)]'
+              : 'border-[var(--color-hairline)] text-muted-foreground hover:bg-[var(--color-canvas-soft)]'
+              }`}
+          >
+            <SlidersHorizontal size={14} />
+            Filter
+            {hasFilters && (
+              <span className="inline-flex items-center justify-center w-4 h-4 text-[10px] rounded-full bg-[var(--color-primary)] text-white font-bold">
+                {selectedOperators.length + selectedTeknologi.length + (selectedKecamatan ? 1 : 0) + (selectedDesa ? 1 : 0) + (tanggalDari ? 1 : 0) + (tanggalSampai ? 1 : 0)}
+              </span>
+            )}
+          </button>
+          <Button size="sm" variant="ghost" onClick={fetchData} className="text-xs gap-1.5 px-3">
+            <RefreshCw size={14} />
+            <span className="hidden sm:inline">Muat ulang</span>
+          </Button>
+          {hasFilters && (
+            <button onClick={clearFilters} className="flex items-center gap-1 text-xs text-red-500 hover:underline">
+              <X size={13} /> Hapus filter
+            </button>
           )}
         </div>
-      </div>
 
-      {/* Stats Strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { label: 'Total (halaman ini)', value: items.length, color: '#0075de' },
-          { label: 'Sinyal Baik', value: statsFromItems.baik, color: '#22c55e' },
-          { label: 'Sinyal Sedang', value: statsFromItems.sedang, color: '#eab308' },
-          { label: 'Sinyal Buruk', value: statsFromItems.buruk, color: '#ef4444' },
-        ].map(s => (
-          <div
-            key={s.label}
-            className="flex flex-col px-4 py-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-surface)] shadow-soft"
-          >
-            <span className="text-xs text-muted-foreground">{s.label}</span>
-            <span className="text-xl font-bold mt-0.5" style={{ color: s.color }}>{s.value}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Filter & Search */}
-      <Card className="border-hairline shadow-soft">
-        <CardContent className="p-4 space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex-1 min-w-[160px] relative">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-              <span className="text-xs text-muted-foreground pl-9 py-2 block">Filter menggunakan panel di bawah</span>
-            </div>
-            <button
-              onClick={() => setShowFilter(prev => !prev)}
-              className={`flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border transition-colors ${
-                showFilter || hasFilters
-                  ? 'bg-[var(--color-primary-light)] text-[var(--color-primary)] border-[var(--color-primary)]'
-                  : 'border-[var(--color-hairline)] text-muted-foreground hover:bg-[var(--color-canvas-soft)]'
-              }`}
-            >
-              <SlidersHorizontal size={14} />
-              Filter
-              {hasFilters && (
-                <span className="inline-flex items-center justify-center w-4 h-4 text-[10px] rounded-full bg-[var(--color-primary)] text-white font-bold">
-                  {selectedOperators.length + selectedTeknologi.length + (selectedKecamatan ? 1 : 0) + (selectedDesa ? 1 : 0) + (tanggalDari ? 1 : 0) + (tanggalSampai ? 1 : 0)}
-                </span>
-              )}
-            </button>
-            <Button size="sm" variant="ghost" onClick={fetchData} className="text-xs gap-1.5 px-3">
-              <RefreshCw size={14} />
-              <span className="hidden sm:inline">Muat ulang</span>
-            </Button>
-            {hasFilters && (
-              <button onClick={clearFilters} className="flex items-center gap-1 text-xs text-red-500 hover:underline">
-                <X size={13} /> Hapus filter
-              </button>
-            )}
-          </div>
-
-          {/* Expanded filter panel */}
-          {showFilter && (
-            <div className="border-t border-[var(--color-hairline)] pt-3 space-y-3">
-              {/* Admin-only: Kecamatan & Desa filter */}
-              {userRole === 'SUPER_ADMIN' && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">Kecamatan</label>
-                    <SearchableSelect
-                      options={kecamatanList.map(k => ({ value: k.id, label: k.nama }))}
-                      value={selectedKecamatan}
-                      onChange={val => { setSelectedKecamatan(val); setSelectedDesa(''); setPage(1) }}
-                      placeholder="Semua Kecamatan"
-                      searchPlaceholder="Cari kecamatan..."
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">Desa/Kelurahan</label>
-                    <SearchableSelect
-                      options={filteredDesa.map(d => ({ value: d.id, label: d.nama }))}
-                      value={selectedDesa}
-                      onChange={val => { setSelectedDesa(val); setPage(1) }}
-                      placeholder="Semua Desa"
-                      searchPlaceholder="Cari desa..."
-                      disabled={!selectedKecamatan}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Operator (multi-select chips) */}
-              <div>
-                <label className="text-xs text-muted-foreground mb-1.5 block">Operator</label>
-                <div className="flex flex-wrap gap-1.5">
-                  {operatorList.map(op => (
-                    <button
-                      key={op.id}
-                      type="button"
-                      onClick={() => toggleMultiSelect(op.id, selectedOperators, setSelectedOperators)}
-                      className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
-                        selectedOperators.includes(op.id)
-                          ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]'
-                          : 'bg-[var(--color-canvas-soft)] text-muted-foreground border-[var(--color-hairline)] hover:border-[var(--color-primary)]'
-                      }`}
-                    >
-                      {op.nama}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Teknologi (multi-select chips) */}
-              <div>
-                <label className="text-xs text-muted-foreground mb-1.5 block">Teknologi</label>
-                <div className="flex flex-wrap gap-1.5">
-                  {teknologiList.map(tek => (
-                    <button
-                      key={tek.id}
-                      type="button"
-                      onClick={() => toggleMultiSelect(tek.id, selectedTeknologi, setSelectedTeknologi)}
-                      className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
-                        selectedTeknologi.includes(tek.id)
-                          ? 'bg-[var(--color-accent-teal)] text-white border-[var(--color-accent-teal)]'
-                          : 'bg-[var(--color-canvas-soft)] text-muted-foreground border-[var(--color-hairline)] hover:border-[var(--color-accent-teal)]'
-                      }`}
-                    >
-                      {tek.nama}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Rentang Tanggal */}
+        {/* Expanded filter panel */}
+        {showFilter && (
+          <div className="border-t border-[var(--color-hairline)] pt-3 space-y-3">
+            {/* Admin-only: Kecamatan & Desa filter */}
+            {userRole === 'SUPER_ADMIN' && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Tanggal Dari</label>
-                  <Input
-                    type="date"
-                    value={tanggalDari}
-                    onChange={e => { setTanggalDari(e.target.value); setPage(1) }}
-                    className="text-sm"
+                  <label className="text-xs text-muted-foreground mb-1 block">Kecamatan</label>
+                  <SearchableSelect
+                    options={kecamatanList.map(k => ({ value: k.id, label: k.nama }))}
+                    value={selectedKecamatan}
+                    onChange={val => { setSelectedKecamatan(val); setSelectedDesa(''); setPage(1) }}
+                    placeholder="Semua Kecamatan"
+                    searchPlaceholder="Cari kecamatan..."
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Tanggal Sampai</label>
-                  <Input
-                    type="date"
-                    value={tanggalSampai}
-                    onChange={e => { setTanggalSampai(e.target.value); setPage(1) }}
-                    className="text-sm"
+                  <label className="text-xs text-muted-foreground mb-1 block">Desa/Kelurahan</label>
+                  <SearchableSelect
+                    options={filteredDesa.map(d => ({ value: d.id, label: d.nama }))}
+                    value={selectedDesa}
+                    onChange={val => { setSelectedDesa(val); setPage(1) }}
+                    placeholder="Semua Desa"
+                    searchPlaceholder="Cari desa..."
+                    disabled={!selectedKecamatan}
                   />
                 </div>
               </div>
+            )}
 
-              {!tanggalDari && !tanggalSampai && (
-                <div className="flex items-center gap-1.5 p-2.5 rounded-lg bg-[var(--color-warning-light)] border border-yellow-200">
-                  <TriangleAlert size={13} className="text-[var(--color-warning)] shrink-0" />
-                  <p className="text-xs text-[var(--color-warning)]">Data default dibatasi 6 bulan terakhir. Pilih rentang tanggal untuk melihat data lebih lama.</p>
-                </div>
-              )}
+            {/* Operator (multi-select chips) */}
+            <div>
+              <label className="text-xs text-muted-foreground mb-1.5 block">Operator</label>
+              <div className="flex flex-wrap gap-1.5">
+                {operatorList.map(op => (
+                  <button
+                    key={op.id}
+                    type="button"
+                    onClick={() => toggleMultiSelect(op.id, selectedOperators, setSelectedOperators)}
+                    className={`text-xs px-2.5 py-1 rounded-full border transition-all ${selectedOperators.includes(op.id)
+                      ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]'
+                      : 'bg-[var(--color-canvas-soft)] text-muted-foreground border-[var(--color-hairline)] hover:border-[var(--color-primary)]'
+                      }`}
+                  >
+                    {op.nama}
+                  </button>
+                ))}
+              </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
 
-      {/* Table vs Map vs IDW View */}
-      {viewMode === 'map' || viewMode === 'idw' ? (
-        <SinyalMap
-          selectedOperators={selectedOperators}
-          selectedTeknologi={selectedTeknologi}
-          selectedKecamatan={selectedKecamatan}
-          selectedDesa={selectedDesa}
-          tanggalDari={tanggalDari}
-          tanggalSampai={tanggalSampai}
-          idwMode={viewMode === 'idw'}
-          desaList={desaList}
-          kecamatanList={kecamatanList}
-          userRole={userRole}
-          userDesaId={userDesaId}
-          onSelectKecamatan={(id) => {
-            setSelectedKecamatan(id)
-            setSelectedDesa('')
-            setPage(1)
-          }}
-          onSelectDesa={(id) => {
-            setSelectedDesa(id)
-            setPage(1)
-          }}
-          onSelectDetail={(id) => {
-            const found = items.find(i => i.id === id)
-            if (found) openDetail(found)
-            else fetch(`/api/sinyal/${id}`).then(r => r.json()).then(res => { if (res.success) openDetail(res.data) })
-          }}
-        />
-      ) : (
-        <Card className="border-hairline shadow-soft overflow-hidden">
+            {/* Teknologi (multi-select chips) */}
+            <div>
+              <label className="text-xs text-muted-foreground mb-1.5 block">Teknologi</label>
+              <div className="flex flex-wrap gap-1.5">
+                {teknologiList.map(tek => (
+                  <button
+                    key={tek.id}
+                    type="button"
+                    onClick={() => toggleMultiSelect(tek.id, selectedTeknologi, setSelectedTeknologi)}
+                    className={`text-xs px-2.5 py-1 rounded-full border transition-all ${selectedTeknologi.includes(tek.id)
+                      ? 'bg-[var(--color-accent-teal)] text-white border-[var(--color-accent-teal)]'
+                      : 'bg-[var(--color-canvas-soft)] text-muted-foreground border-[var(--color-hairline)] hover:border-[var(--color-accent-teal)]'
+                      }`}
+                  >
+                    {tek.nama}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Rentang Tanggal */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Tanggal Dari</label>
+                <Input
+                  type="date"
+                  value={tanggalDari}
+                  onChange={e => { setTanggalDari(e.target.value); setPage(1) }}
+                  className="text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Tanggal Sampai</label>
+                <Input
+                  type="date"
+                  value={tanggalSampai}
+                  onChange={e => { setTanggalSampai(e.target.value); setPage(1) }}
+                  className="text-sm"
+                />
+              </div>
+            </div>
+
+            {!tanggalDari && !tanggalSampai && (
+              <div className="flex items-center gap-1.5 p-2.5 rounded-lg bg-[var(--color-warning-light)] border border-yellow-200">
+                <TriangleAlert size={13} className="text-[var(--color-warning)] shrink-0" />
+                <p className="text-xs text-[var(--color-warning)]">Data default dibatasi 6 bulan terakhir. Pilih rentang tanggal untuk melihat data lebih lama.</p>
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+
+    {/* Table vs Map vs IDW View */}
+    {viewMode === 'map' || viewMode === 'idw' ? (
+      <SinyalMap
+        selectedOperators={selectedOperators}
+        selectedTeknologi={selectedTeknologi}
+        selectedKecamatan={selectedKecamatan}
+        selectedDesa={selectedDesa}
+        tanggalDari={tanggalDari}
+        tanggalSampai={tanggalSampai}
+        idwMode={viewMode === 'idw'}
+        desaList={desaList}
+        kecamatanList={kecamatanList}
+        userRole={userRole}
+        userDesaId={userDesaId}
+        onSelectKecamatan={(id) => {
+          setSelectedKecamatan(id)
+          setSelectedDesa('')
+          setPage(1)
+        }}
+        onSelectDesa={(id) => {
+          setSelectedDesa(id)
+          setPage(1)
+        }}
+        onSelectDetail={(id) => {
+          const found = items.find(i => i.id === id)
+          if (found) openDetail(found)
+          else fetch(`/api/sinyal/${id}`).then(r => r.json()).then(res => { if (res.success) openDetail(res.data) })
+        }}
+        onOpenInputForm={handleOpenInputFromIdw}
+      />
+    ) : (
+      <Card className="border-hairline shadow-soft overflow-hidden">
         <CardHeader className="px-5 py-4 border-b border-[var(--color-hairline)] flex-row items-center justify-between">
           <div className="text-sm font-semibold text-foreground">
             {loading ? 'Memuat data...' : `${meta?.total ?? 0} data ditemukan`}
@@ -544,9 +591,8 @@ function SinyalPageInner() {
                   {items.map((item, idx) => (
                     <tr
                       key={item.id}
-                      className={`border-t border-[var(--color-hairline)] hover:bg-[var(--color-canvas-soft)] transition-colors ${
-                        idx % 2 === 1 ? 'bg-[var(--color-canvas-soft)]/40' : ''
-                      }`}
+                      className={`border-t border-[var(--color-hairline)] hover:bg-[var(--color-canvas-soft)] transition-colors ${idx % 2 === 1 ? 'bg-[var(--color-canvas-soft)]/40' : ''
+                        }`}
                     >
                       <td className="px-4 py-3 whitespace-nowrap text-xs">
                         {new Date(item.tanggalPengukuran).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -691,11 +737,10 @@ function SinyalPageInner() {
                   <button
                     key={p}
                     onClick={() => setPage(p)}
-                    className={`w-7 h-7 text-xs rounded-md border transition-colors ${
-                      p === meta.page
-                        ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]'
-                        : 'border-[var(--color-hairline)] hover:bg-white text-muted-foreground'
-                    }`}
+                    className={`w-7 h-7 text-xs rounded-md border transition-colors ${p === meta.page
+                      ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]'
+                      : 'border-[var(--color-hairline)] hover:bg-white text-muted-foreground'
+                      }`}
                   >
                     {p}
                   </button>
@@ -712,36 +757,36 @@ function SinyalPageInner() {
           </div>
         )}
       </Card>
-      )}
+    )}
 
-      {/* Dialogs */}
-      <SinyalFormDialog
-        open={formOpen}
-        onClose={() => { setFormOpen(false); setEditData(null) }}
-        onSuccess={fetchData}
-        editData={editData}
-        userRole={userRole}
-        userDesaId={userDesaId}
-      />
+    {/* Dialogs */}
+    <SinyalFormDialog
+      open={formOpen}
+      onClose={() => { setFormOpen(false); setEditData(null) }}
+      onSuccess={fetchData}
+      editData={editData}
+      userRole={userRole}
+      userDesaId={userDesaId}
+    />
 
-      <SinyalDetailDialog
-        open={detailOpen}
-        onClose={() => { setDetailOpen(false); setDetailData(null) }}
-        data={detailData}
-        loading={detailLoading}
-        canEdit={detailData ? canEditItem(detailData) : false}
-        canDelete={detailData ? canDeleteItem(detailData) : false}
-        onEdit={() => detailData && openEdit(detailData)}
-        onDelete={() => detailData && handleDelete(detailData.id)}
-        onPhotoDeleted={(fotoId) => {
-          setDetailData(prev => prev ? { ...prev, foto: prev.foto.filter(f => f.id !== fotoId) } : prev)
-        }}
-        onPhotoAdded={() => {
-          if (detailData) openDetail(detailData)
-        }}
-      />
-    </div>
-  )
+    <SinyalDetailDialog
+      open={detailOpen}
+      onClose={() => { setDetailOpen(false); setDetailData(null) }}
+      data={detailData}
+      loading={detailLoading}
+      canEdit={detailData ? canEditItem(detailData) : false}
+      canDelete={detailData ? canDeleteItem(detailData) : false}
+      onEdit={() => detailData && openEdit(detailData)}
+      onDelete={() => detailData && handleDelete(detailData.id)}
+      onPhotoDeleted={(fotoId) => {
+        setDetailData(prev => prev ? { ...prev, foto: prev.foto.filter(f => f.id !== fotoId) } : prev)
+      }}
+      onPhotoAdded={() => {
+        if (detailData) openDetail(detailData)
+      }}
+    />
+  </div>
+)
 }
 
 export default function SinyalPage() {
