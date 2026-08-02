@@ -82,7 +82,23 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Aset statis lainnya (JS, CSS, images): Cache-First
+  // HTML Page Navigation: Network-First (selalu muat versi terbaru dari server)
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone()
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
+          }
+          return response
+        })
+        .catch(() => caches.match(request).then((cached) => cached || caches.match('/')))
+    )
+    return
+  }
+
+  // Aset statis (JS, CSS, images): Cache-First
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached

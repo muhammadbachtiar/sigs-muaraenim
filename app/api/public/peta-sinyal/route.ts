@@ -2,6 +2,11 @@ import { prisma } from '@/lib/prisma'
 import { successResponse, serverErrorResponse, parseSearchParams } from '@/lib/api-helpers'
 import { DEFAULT_DATA_MONTHS } from '@/lib/constants'
 
+// Batas data per level filter (agar API tetap ringan)
+const LIMIT_KABUPATEN = 5000  // Seluruh kabupaten (tanpa filter wilayah)
+const LIMIT_KECAMATAN = 3000  // Filter per kecamatan
+const LIMIT_DESA = 1000       // Filter per desa (semua data desa dimuat)
+
 export async function GET(request: Request) {
   try {
     const params = parseSearchParams(request)
@@ -9,20 +14,26 @@ export async function GET(request: Request) {
     const desaId = params.get('desa_id')
     const kecamatanId = params.get('kecamatan_id')
 
-    // Peta publik wajib pilih Kecamatan & Desa terlebih dahulu
-    if (!desaId) {
-      return successResponse([], 'Pilih kecamatan dan desa untuk menampilkan data sinyal publik', { total: 0 })
+    // Tentukan batas data berdasarkan level filter aktif
+    let dataLimit: number
+    if (desaId) {
+      dataLimit = LIMIT_DESA
+    } else if (kecamatanId) {
+      dataLimit = LIMIT_KECAMATAN
+    } else {
+      dataLimit = LIMIT_KABUPATEN
     }
 
-    const where: any = {
-      desaKelurahanId: desaId,
-    }
+    const where: any = {}
 
-    if (kecamatanId) {
+    // Filter wilayah (opsional — tanpa filter = seluruh kabupaten)
+    if (desaId) {
+      where.desaKelurahanId = desaId
+    } else if (kecamatanId) {
       where.desaKelurahan = { kecamatanId }
     }
 
-    // BBOX filter (optional)
+    // BBOX filter (opsional — untuk optimasi viewport)
     const minLat = params.get('minLat')
     const maxLat = params.get('maxLat')
     const minLng = params.get('minLng')
@@ -32,20 +43,21 @@ export async function GET(request: Request) {
       where.longitude = { gte: parseFloat(minLng), lte: parseFloat(maxLng) }
     }
 
-    // Operator & Teknologi filter
+    // Operator filter
     const operatorId = params.get('operator_id')
     if (operatorId) {
       const ids = operatorId.split(',').filter(Boolean)
       where.operatorId = ids.length === 1 ? ids[0] : { in: ids }
     }
 
+    // Teknologi filter
     const teknologiId = params.get('teknologi_id')
     if (teknologiId) {
       const ids = teknologiId.split(',').filter(Boolean)
       where.teknologiId = ids.length === 1 ? ids[0] : { in: ids }
     }
 
-    // Tanggal filter (default 6 bulan)
+    // Tanggal filter — default 6 bulan terakhir (seragam dengan konstanta sistem)
     const tanggalDari = params.get('tanggal_dari')
     const tanggalSampai = params.get('tanggal_sampai')
     if (tanggalDari || tanggalSampai) {
@@ -58,6 +70,7 @@ export async function GET(request: Request) {
       where.tanggalPengukuran = { gte: defaultDate }
     }
 
+    // Hanya ambil field minimum yang dibutuhkan peta (payload ringan)
     const data = await prisma.riwayatSinyal.findMany({
       where,
       select: {
@@ -70,13 +83,22 @@ export async function GET(request: Request) {
         teknologi: { select: { id: true, nama: true } },
         desaKelurahan: { select: { id: true, nama: true } },
       },
-      take: 5000,
+      take: dataLimit,
       orderBy: { tanggalPengukuran: 'desc' },
     })
 
     return successResponse(data, 'Data peta sinyal berhasil diambil', {
       total: data.length,
-      bbox: minLat ? { minLat: parseFloat(minLat!), maxLat: parseFloat(maxLat!), minLng: parseFloat(minLng!), maxLng: parseFloat(maxLng!) } : null,
+      limit: dataLimit,
+      level: desaId ? 'desa' : kecamatanId ? 'kecamatan' : 'kabupaten',
+      bbox: minLat
+        ? {
+            minLat: parseFloat(minLat!),
+            maxLat: parseFloat(maxLat!),
+            minLng: parseFloat(minLng!),
+            maxLng: parseFloat(maxLng!),
+          }
+        : null,
     })
   } catch {
     return serverErrorResponse()

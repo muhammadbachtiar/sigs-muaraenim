@@ -2,7 +2,15 @@
 
 import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
-import { Signal, SlidersHorizontal, RefreshCw, X, Loader2, MapPin } from 'lucide-react'
+import {
+  Signal,
+  SlidersHorizontal,
+  X,
+  Loader2,
+  Globe,
+  MapPin,
+  ChevronRight,
+} from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import SearchableSelect from '@/components/ui/searchable-select'
@@ -16,7 +24,12 @@ const PublicSinyalMap = dynamic(() => import('@/components/map/PublicSinyalMap')
   ),
 })
 
-type Option = { id: string; nama: string; kecamatanId?: string; kecamatan?: { id?: string; nama: string } }
+type Option = {
+  id: string
+  nama: string
+  kecamatanId?: string
+  kecamatan?: { id?: string; nama: string }
+}
 
 export default function PetaPublikPage() {
   const [kecamatanList, setKecamatanList] = useState<Option[]>([])
@@ -30,16 +43,15 @@ export default function PetaPublikPage() {
   const [tanggalSampai, setTanggalSampai] = useState('')
 
   const [showFilter, setShowFilter] = useState(false)
-  const [loadingDesa, setLoadingDesa] = useState(false)
 
-  const [allDesas, setAllDesas] = useState<Array<{ id: string; nama: string; kecamatanId?: string; kecamatan?: { id?: string; nama: string } }>>([])
+  const [allDesas, setAllDesas] = useState<Option[]>([])
 
-  // Fetch Kecamatan, Operator, and All Desas on mount
+  // Fetch master data saat mount
   useEffect(() => {
     Promise.all([
-      fetch('/api/master/kecamatan?is_select=true').then(r => r.json()),
-      fetch('/api/master/operator?is_select=true').then(r => r.json()),
-      fetch('/api/master/desa?is_select=true').then(r => r.json()),
+      fetch('/api/master/kecamatan?is_select=true').then((r) => r.json()),
+      fetch('/api/master/operator?is_select=true').then((r) => r.json()),
+      fetch('/api/master/desa?is_select=true').then((r) => r.json()),
     ]).then(([kec, op, desa]) => {
       if (kec.success) setKecamatanList(kec.data)
       if (op.success) setOperatorList(op.data)
@@ -50,18 +62,22 @@ export default function PetaPublikPage() {
     })
   }, [])
 
-  // Filter Desa when Kecamatan changes
+  // Filter desa saat kecamatan berubah
   useEffect(() => {
     if (!selectedKecamatan) {
       setDesaList(allDesas)
     } else {
-      setDesaList(allDesas.filter(d => d.kecamatanId === selectedKecamatan || d.kecamatan?.id === selectedKecamatan))
+      setDesaList(
+        allDesas.filter(
+          (d) => d.kecamatanId === selectedKecamatan || d.kecamatan?.id === selectedKecamatan,
+        ),
+      )
     }
   }, [selectedKecamatan, allDesas])
 
   const toggleOperator = (id: string) => {
-    setSelectedOperators(prev =>
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    setSelectedOperators((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     )
   }
 
@@ -73,7 +89,19 @@ export default function PetaPublikPage() {
     setTanggalSampai('')
   }
 
-  const hasOptionalFilters = selectedOperators.length > 0 || tanggalDari !== '' || tanggalSampai !== ''
+  const hasAnyFilter =
+    selectedKecamatan !== '' ||
+    selectedDesa !== '' ||
+    selectedOperators.length > 0 ||
+    tanggalDari !== '' ||
+    tanggalSampai !== ''
+
+  const hasOptionalFilters =
+    selectedOperators.length > 0 || tanggalDari !== '' || tanggalSampai !== ''
+
+  // Breadcrumb lokasi aktif
+  const selectedKecamatanNama = kecamatanList.find((k) => k.id === selectedKecamatan)?.nama
+  const selectedDesaNama = desaList.find((d) => d.id === selectedDesa)?.nama
 
   return (
     <div className="p-4 md:p-6 space-y-4 max-w-7xl mx-auto">
@@ -91,7 +119,7 @@ export default function PetaPublikPage() {
 
         {/* Filter Toggle */}
         <button
-          onClick={() => setShowFilter(prev => !prev)}
+          onClick={() => setShowFilter((prev) => !prev)}
           className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${
             showFilter || hasOptionalFilters
               ? 'bg-[var(--color-primary-light)] text-[var(--color-primary)] border-[var(--color-primary)] font-semibold'
@@ -99,26 +127,53 @@ export default function PetaPublikPage() {
           }`}
         >
           <SlidersHorizontal size={14} />
-          Filter Tambahan
+          Filter Lanjutan
+          {hasOptionalFilters && (
+            <span className="ml-0.5 flex items-center justify-center w-4 h-4 rounded-full bg-[var(--color-primary)] text-white text-[9px] font-bold">
+              {selectedOperators.length + (tanggalDari ? 1 : 0) + (tanggalSampai ? 1 : 0)}
+            </span>
+          )}
         </button>
       </div>
 
-      {/* Main Filter Toolbar (Wajib: Kecamatan & Desa) */}
+      {/* Filter Toolbar */}
       <div className="p-3.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-surface)] shadow-soft space-y-3">
+
+        {/* Breadcrumb lokasi — hanya tampil jika ada filter aktif */}
+        {(selectedKecamatanNama || selectedDesaNama) && (
+          <div className="flex items-center gap-1 text-[11px] font-medium text-[var(--color-primary)] bg-[var(--color-primary-light)] px-3 py-1.5 rounded-lg w-fit">
+            <Globe size={11} />
+            <span>Kabupaten Muara Enim</span>
+            {selectedKecamatanNama && (
+              <>
+                <ChevronRight size={11} className="text-muted-foreground" />
+                <MapPin size={10} />
+                <span>{selectedKecamatanNama}</span>
+              </>
+            )}
+            {selectedDesaNama && (
+              <>
+                <ChevronRight size={11} className="text-muted-foreground" />
+                <span>{selectedDesaNama}</span>
+              </>
+            )}
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
           {/* Select Kecamatan */}
           <div>
             <label className="text-[11px] font-semibold text-muted-foreground block mb-1">
-              Kecamatan <span className="text-red-500">*</span>
+              Kecamatan
             </label>
             <SearchableSelect
-              options={kecamatanList.map(k => ({ value: k.id, label: k.nama }))}
+              options={kecamatanList.map((k) => ({ value: k.id, label: k.nama }))}
               value={selectedKecamatan}
-              onChange={val => {
+              onChange={(val) => {
                 setSelectedKecamatan(val)
                 setSelectedDesa('')
               }}
-              placeholder="— Pilih Kecamatan —"
+              placeholder="— Semua Kecamatan —"
               searchPlaceholder="Cari kecamatan..."
             />
           </div>
@@ -126,57 +181,61 @@ export default function PetaPublikPage() {
           {/* Select Desa */}
           <div>
             <label className="text-[11px] font-semibold text-muted-foreground block mb-1">
-              Desa / Kelurahan <span className="text-red-500">*</span>
+              Desa / Kelurahan
             </label>
             <SearchableSelect
-              options={desaList.map(d => ({
+              options={desaList.map((d) => ({
                 value: d.id,
-                label: selectedKecamatan ? d.nama : `${d.kecamatan?.nama || 'Desa'} / ${d.nama}`
+                label: selectedKecamatan
+                  ? d.nama
+                  : `${d.kecamatan?.nama || ''} / ${d.nama}`,
               }))}
               value={selectedDesa}
               onChange={(val) => {
                 setSelectedDesa(val)
                 if (val && !selectedKecamatan) {
-                  const matched = allDesas.find(d => d.id === val)
+                  const matched = allDesas.find((d) => d.id === val)
                   const kecId = matched?.kecamatanId || matched?.kecamatan?.id
                   if (kecId) setSelectedKecamatan(kecId)
                 }
               }}
-              placeholder="— Pilih / Cari Desa/Kelurahan —"
+              placeholder={selectedKecamatan ? '— Semua Desa —' : '— Cari / Pilih Desa —'}
               searchPlaceholder="Cari desa/kelurahan..."
             />
           </div>
 
-          {/* Status Indicator / Clear */}
-          <div className="flex items-end justify-between sm:justify-end gap-2">
-            {(selectedKecamatan || selectedDesa) && (
+          {/* Reset */}
+          <div className="flex items-end justify-start gap-2">
+            {hasAnyFilter && (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={resetFilters}
-                className="text-xs text-red-500 hover:text-red-600 gap-1 h-9"
+                className="text-xs text-red-500 hover:text-red-600 hover:bg-red-50 gap-1 h-9"
               >
-                <X size={14} /> Reset Lokasi
+                <X size={14} /> Reset Filter
               </Button>
             )}
           </div>
         </div>
 
-        {/* Optional Filter Panel (Expanded) */}
+        {/* Panel Filter Lanjutan */}
         {showFilter && (
           <div className="border-t border-[var(--color-hairline)] pt-3 space-y-3">
             {/* Operator Chips */}
             <div>
-              <label className="text-[11px] font-semibold text-muted-foreground block mb-1.5">Operator Seluler</label>
+              <label className="text-[11px] font-semibold text-muted-foreground block mb-1.5">
+                Operator Seluler
+              </label>
               <div className="flex flex-wrap gap-1.5">
-                {operatorList.map(op => (
+                {operatorList.map((op) => (
                   <button
                     key={op.id}
                     type="button"
                     onClick={() => toggleOperator(op.id)}
                     className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
                       selectedOperators.includes(op.id)
-                        ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]'
+                        ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-sm'
                         : 'bg-[var(--color-canvas-soft)] text-muted-foreground border-[var(--color-hairline)] hover:border-[var(--color-primary)]'
                     }`}
                   >
@@ -189,20 +248,24 @@ export default function PetaPublikPage() {
             {/* Date Range */}
             <div className="grid grid-cols-2 gap-3 max-w-md">
               <div>
-                <label className="text-[11px] text-muted-foreground block mb-1">Tanggal Dari</label>
+                <label className="text-[11px] text-muted-foreground block mb-1">
+                  Tanggal Dari
+                </label>
                 <Input
                   type="date"
                   value={tanggalDari}
-                  onChange={e => setTanggalDari(e.target.value)}
+                  onChange={(e) => setTanggalDari(e.target.value)}
                   className="text-xs h-8"
                 />
               </div>
               <div>
-                <label className="text-[11px] text-muted-foreground block mb-1">Tanggal Sampai</label>
+                <label className="text-[11px] text-muted-foreground block mb-1">
+                  Tanggal Sampai
+                </label>
                 <Input
                   type="date"
                   value={tanggalSampai}
-                  onChange={e => setTanggalSampai(e.target.value)}
+                  onChange={(e) => setTanggalSampai(e.target.value)}
                   className="text-xs h-8"
                 />
               </div>
@@ -211,7 +274,7 @@ export default function PetaPublikPage() {
         )}
       </div>
 
-      {/* Map Content */}
+      {/* Peta */}
       <PublicSinyalMap
         selectedKecamatanId={selectedKecamatan}
         selectedDesaId={selectedDesa}

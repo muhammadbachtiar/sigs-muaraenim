@@ -31,7 +31,7 @@ const navItems = [
   { href: '/demografi', label: 'Demografi Desa', icon: Users },
   { href: '/draf', label: 'Draf Tersimpan', icon: FileText },
   { href: '/users', label: 'Manajemen User', icon: UserCog },
-  { href: '/peta', label: 'Peta Publik', icon: Map, external: true },
+  { href: '/peta', label: 'Peta Publik', icon: Map },
 ]
 
 const adminOnlyItems = ['/master', '/users']
@@ -101,21 +101,6 @@ export default function DashboardLayout({
           {filteredNav.map((item) => {
             const Icon = item.icon
             const isActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)
-
-            if (item.external) {
-              return (
-                <a
-                  key={item.href}
-                  href={item.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="dash-nav-item"
-                >
-                  <Icon size={18} />
-                  <span>{item.label}</span>
-                </a>
-              )
-            }
 
             return (
               <Link
