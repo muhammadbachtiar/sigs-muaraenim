@@ -1,41 +1,48 @@
 version: '3.8'
 
 services:
+  # ----------------------------------------------------------------------------
+  # Next.js Application Service
+  # ----------------------------------------------------------------------------
   app:
     build: .
     container_name: sigs_muaraenim_app
     restart: always
     ports:
       - "3000:3000"
-    environment:
-      - DATABASE_URL=postgresql://postgres:password@db:5432/sigs_muaraenim?schema=public
-      - NEXTAUTH_SECRET=rahasiasuperadmin123
-      - NEXTAUTH_URL=http://localhost:3000
-      - SUPER_ADMIN_USERNAME=admin
-      - SUPER_ADMIN_PASSWORD=admin123
+    env_file:
+      - .env
     volumes:
       - ./uploads:/app/uploads
-    depends_on:
-      db:
-        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
+  # ----------------------------------------------------------------------------
+  # PostgreSQL 15 + PostGIS 3.3 Database Service (Aktif jika profile with-db)
+  # ----------------------------------------------------------------------------
   db:
+    profiles:
+      - with-db
+      - local-db
     image: postgis/postgis:15-3.3
     container_name: sigs_muaraenim_db
     restart: always
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=sigs_muaraenim
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - POSTGRES_DB=${POSTGRES_DB:-sigs_muaraenim}
     ports:
       - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 5s
       timeout: 5s
       retries: 5
 
+# ------------------------------------------------------------------------------
+# Persistent Volume Storage
+# ------------------------------------------------------------------------------
 volumes:
   pgdata:
