@@ -898,13 +898,14 @@ function TowerPage() {
         </Button>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards (Informative Overview) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="border-hairline shadow-soft bg-gradient-to-br from-primary/5 via-transparent to-transparent">
           <CardContent className="flex items-center justify-between p-5">
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Total Tower</p>
-              <div className="text-3xl font-bold font-mono mt-1 text-foreground">{totalAll}</div>
+              <div className="text-3xl font-bold font-mono mt-1 text-foreground">{totalAll.toLocaleString('id-ID')}</div>
+              <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">Semua Status</p>
             </div>
             <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
               <TowerControl size={20} />
@@ -917,8 +918,9 @@ function TowerPage() {
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Perlu Verifikasi</p>
               <div className="text-3xl font-bold font-mono mt-1 text-amber-600 dark:text-amber-400">
-                {totalPending}
+                {totalPending.toLocaleString('id-ID')}
               </div>
+              <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">Menunggu Persetujuan</p>
             </div>
             <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-600 dark:text-amber-400">
               <Clock size={20} />
@@ -930,7 +932,8 @@ function TowerPage() {
           <CardContent className="flex items-center justify-between p-5">
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Disetujui</p>
-              <div className="text-3xl font-bold font-mono mt-1 text-success">{totalApproved}</div>
+              <div className="text-3xl font-bold font-mono mt-1 text-success">{totalApproved.toLocaleString('id-ID')}</div>
+              <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">Terverifikasi Aktif</p>
             </div>
             <div className="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center text-success">
               <CheckCircle2 size={20} />
@@ -942,7 +945,8 @@ function TowerPage() {
           <CardContent className="flex items-center justify-between p-5">
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Ditolak (Revisi)</p>
-              <div className="text-3xl font-bold font-mono mt-1 text-destructive">{totalRejected}</div>
+              <div className="text-3xl font-bold font-mono mt-1 text-destructive">{totalRejected.toLocaleString('id-ID')}</div>
+              <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">Perlu Perbaikan Data</p>
             </div>
             <div className="w-10 h-10 rounded-lg bg-destructive/10 flex items-center justify-center text-destructive">
               <XCircle size={20} />

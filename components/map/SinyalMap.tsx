@@ -12,6 +12,7 @@ import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { IdwGridCell } from '@/lib/idw'
 type Props = {
+  qualityFilter?: string
   selectedOperators?: string[]
   selectedTeknologi?: string[]
   selectedKecamatan?: string
@@ -31,6 +32,7 @@ type Props = {
 }
 
 export default function SinyalMap({
+  qualityFilter = 'ALL',
   selectedOperators = [],
   selectedTeknologi = [],
   selectedKecamatan = '',
@@ -69,6 +71,7 @@ export default function SinyalMap({
 
   const buildParams = useCallback(() => {
     const p = new URLSearchParams({ for_map: 'true' })
+    if (qualityFilter && qualityFilter !== 'ALL') p.set('quality', qualityFilter)
     if (selectedOperators.length) p.set('operator_id', selectedOperators.join(','))
     if (selectedTeknologi.length) p.set('teknologi_id', selectedTeknologi.join(','))
     if (selectedKecamatan) p.set('kecamatan_id', selectedKecamatan)
@@ -76,7 +79,7 @@ export default function SinyalMap({
     if (tanggalDari) p.set('tanggal_dari', tanggalDari)
     if (tanggalSampai) p.set('tanggal_sampai', tanggalSampai)
     return p
-  }, [selectedOperators, selectedTeknologi, selectedKecamatan, selectedDesa, tanggalDari, tanggalSampai])
+  }, [qualityFilter, selectedOperators, selectedTeknologi, selectedKecamatan, selectedDesa, tanggalDari, tanggalSampai])
 
   const fetchData = useCallback(async () => {
     setLoading(true)

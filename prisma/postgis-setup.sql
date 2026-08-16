@@ -31,3 +31,7 @@ CREATE INDEX IF NOT EXISTS idx_riwayat_sinyal_geom ON riwayat_sinyal USING GIST 
 
 -- Spatial index for tower
 CREATE INDEX IF NOT EXISTS idx_tower_geom ON tower USING GIST (geom);
+
+-- Performance indexes for aggregations and filtering
+CREATE INDEX IF NOT EXISTS idx_riwayat_sinyal_rsrp ON riwayat_sinyal (rsrp);
+CREATE INDEX IF NOT EXISTS idx_tower_status_verifikasi ON tower (status_verifikasi);

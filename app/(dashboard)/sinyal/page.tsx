@@ -47,7 +47,16 @@ type SinyalItem = {
   foto: { id: string; url: string; keterangan: string | null }[]
 }
 
-type Meta = { total: number; page: number; page_size: number; total_pages: number }
+type Meta = {
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
+  totalAll?: number
+  totalGood?: number
+  totalFair?: number
+  totalPoor?: number
+}
 
 function SinyalPageInner() {
   const { data: session } = useSession()
@@ -63,6 +72,7 @@ function SinyalPageInner() {
   const [viewMode, setViewMode] = useState<'table' | 'map' | 'idw'>('table')
 
   // Filter state
+  const [qualityFilter, setQualityFilter] = useState<'ALL' | 'GOOD' | 'FAIR' | 'POOR'>('ALL')
   const [showFilter, setShowFilter] = useState(false)
   const [operatorList, setOperatorList] = useState<{ id: string; nama: string }[]>([])
   const [teknologiList, setTeknologiList] = useState<{ id: string; nama: string }[]>([])
@@ -139,24 +149,17 @@ function SinyalPageInner() {
     setFormOpen(true)
   }
 
-  // Stats computed from current page + total
-  const statsFromItems = {
-    baik: items.filter(i => (i.rsrp ?? -999) > -85).length,
-    sedang: items.filter(i => { const r = i.rsrp ?? -999; return r <= -85 && r >= -99 }).length,
-    buruk: items.filter(i => (i.rsrp ?? -999) < -99).length,
-    noData: items.filter(i => i.rsrp === null).length,
-  }
-
-const buildParams = useCallback(() => {
-  const p = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
-  if (selectedOperators.length) p.set('operator_id', selectedOperators.join(','))
-  if (selectedTeknologi.length) p.set('teknologi_id', selectedTeknologi.join(','))
-  if (selectedKecamatan) p.set('kecamatan_id', selectedKecamatan)
-  if (selectedDesa) p.set('desa_id', selectedDesa)
-  if (tanggalDari) p.set('tanggal_dari', tanggalDari)
-  if (tanggalSampai) p.set('tanggal_sampai', tanggalSampai)
-  return p
-}, [page, pageSize, selectedOperators, selectedTeknologi, selectedKecamatan, selectedDesa, tanggalDari, tanggalSampai])
+  const buildParams = useCallback(() => {
+    const p = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
+    if (qualityFilter !== 'ALL') p.set('quality', qualityFilter)
+    if (selectedOperators.length) p.set('operator_id', selectedOperators.join(','))
+    if (selectedTeknologi.length) p.set('teknologi_id', selectedTeknologi.join(','))
+    if (selectedKecamatan) p.set('kecamatan_id', selectedKecamatan)
+    if (selectedDesa) p.set('desa_id', selectedDesa)
+    if (tanggalDari) p.set('tanggal_dari', tanggalDari)
+    if (tanggalSampai) p.set('tanggal_sampai', tanggalSampai)
+    return p
+  }, [page, pageSize, qualityFilter, selectedOperators, selectedTeknologi, selectedKecamatan, selectedDesa, tanggalDari, tanggalSampai])
 
 const fetchData = useCallback(async () => {
   setLoading(true)
@@ -193,17 +196,30 @@ useEffect(() => {
   })
 }, [])
 
-const hasFilters = selectedOperators.length > 0 || selectedTeknologi.length > 0 || selectedKecamatan || selectedDesa || tanggalDari || tanggalSampai
+  const hasFilters =
+    qualityFilter !== 'ALL' ||
+    selectedOperators.length > 0 ||
+    selectedTeknologi.length > 0 ||
+    selectedKecamatan ||
+    selectedDesa ||
+    tanggalDari ||
+    tanggalSampai
 
-const clearFilters = () => {
-  setSelectedOperators([])
-  setSelectedTeknologi([])
-  setSelectedKecamatan('')
-  setSelectedDesa('')
-  setTanggalDari('')
-  setTanggalSampai('')
-  setPage(1)
-}
+  const clearFilters = () => {
+    setQualityFilter('ALL')
+    setSelectedOperators([])
+    setSelectedTeknologi([])
+    setSelectedKecamatan('')
+    setSelectedDesa('')
+    setTanggalDari('')
+    setTanggalSampai('')
+    setPage(1)
+  }
+
+  const handleQualityCardClick = (key: 'ALL' | 'GOOD' | 'FAIR' | 'POOR') => {
+    setQualityFilter((prev) => (prev === key ? 'ALL' : key))
+    setPage(1)
+  }
 
 const toggleMultiSelect = (id: string, selected: string[], setter: (v: string[]) => void) => {
   setter(selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id])
@@ -355,22 +371,66 @@ return (
       </div>
     </div>
 
-    {/* Stats Strip */}
+    {/* Stats Cards (Interactive Quality Selector) */}
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
       {[
-        { label: 'Total (halaman ini)', value: items.length, color: '#0075de' },
-        { label: 'Sinyal Baik', value: statsFromItems.baik, color: '#22c55e' },
-        { label: 'Sinyal Sedang', value: statsFromItems.sedang, color: '#eab308' },
-        { label: 'Sinyal Buruk', value: statsFromItems.buruk, color: '#ef4444' },
-      ].map(s => (
-        <div
-          key={s.label}
-          className="flex flex-col px-4 py-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-surface)] shadow-soft"
-        >
-          <span className="text-xs text-muted-foreground">{s.label}</span>
-          <span className="text-xl font-bold mt-0.5" style={{ color: s.color }}>{s.value}</span>
-        </div>
-      ))}
+        {
+          key: 'ALL' as const,
+          label: 'Total Sinyal',
+          sub: 'Semua Kategori',
+          value: meta?.totalAll ?? meta?.total ?? 0,
+          color: '#0075de',
+        },
+        {
+          key: 'GOOD' as const,
+          label: 'Sinyal Baik',
+          sub: '≥ -85 dBm',
+          value: meta?.totalGood ?? 0,
+          color: '#22c55e',
+        },
+        {
+          key: 'FAIR' as const,
+          label: 'Sinyal Sedang',
+          sub: '-86 s/d -99 dBm',
+          value: meta?.totalFair ?? 0,
+          color: '#eab308',
+        },
+        {
+          key: 'POOR' as const,
+          label: 'Sinyal Buruk',
+          sub: '< -99 dBm',
+          value: meta?.totalPoor ?? 0,
+          color: '#ef4444',
+        },
+      ].map((s) => {
+        const isActive = qualityFilter === s.key
+        return (
+          <button
+            key={s.key}
+            type="button"
+            onClick={() => handleQualityCardClick(s.key)}
+            className={`flex flex-col text-left px-4 py-3 rounded-xl border transition-all duration-200 cursor-pointer group hover:scale-[1.02] hover:shadow-elevated ${
+              isActive
+                ? 'border-primary ring-1 ring-primary/40 shadow-soft bg-card'
+                : 'border-[var(--color-hairline)] bg-[var(--color-surface)] shadow-soft hover:border-[var(--color-primary)]/40'
+            }`}
+          >
+            <div className="flex items-center justify-between w-full">
+              <span className="text-xs font-semibold text-muted-foreground group-hover:text-foreground transition-colors">
+                {s.label}
+              </span>
+            </div>
+            <div className="flex items-baseline justify-between mt-1 w-full">
+              <span className="text-2xl font-bold font-mono tracking-tight" style={{ color: s.color }}>
+                {s.value.toLocaleString('id-ID')}
+              </span>
+              <span className="text-[10px] text-muted-foreground font-medium">
+                {s.sub}
+              </span>
+            </div>
+          </button>
+        )
+      })}
     </div>
 
     {/* Filter & Search */}
@@ -392,7 +452,7 @@ return (
             Filter
             {hasFilters && (
               <span className="inline-flex items-center justify-center w-4 h-4 text-[10px] rounded-full bg-[var(--color-primary)] text-white font-bold">
-                {selectedOperators.length + selectedTeknologi.length + (selectedKecamatan ? 1 : 0) + (selectedDesa ? 1 : 0) + (tanggalDari ? 1 : 0) + (tanggalSampai ? 1 : 0)}
+                {(qualityFilter !== 'ALL' ? 1 : 0) + selectedOperators.length + selectedTeknologi.length + (selectedKecamatan ? 1 : 0) + (selectedDesa ? 1 : 0) + (tanggalDari ? 1 : 0) + (tanggalSampai ? 1 : 0)}
               </span>
             )}
           </button>
@@ -410,6 +470,31 @@ return (
         {/* Expanded filter panel */}
         {showFilter && (
           <div className="border-t border-[var(--color-hairline)] pt-3 space-y-3">
+            {/* Filter Kualitas Sinyal (Chips) */}
+            <div>
+              <label className="text-xs text-muted-foreground mb-1.5 block">Kualitas Sinyal</label>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { key: 'ALL' as const, label: 'Semua Kualitas' },
+                  { key: 'GOOD' as const, label: 'Sinyal Baik (≥ -85 dBm)' },
+                  { key: 'FAIR' as const, label: 'Sinyal Sedang (-86 s/d -99 dBm)' },
+                  { key: 'POOR' as const, label: 'Sinyal Buruk (< -99 dBm)' },
+                ].map((q) => (
+                  <button
+                    key={q.key}
+                    type="button"
+                    onClick={() => handleQualityCardClick(q.key)}
+                    className={`text-xs px-2.5 py-1 rounded-full border transition-all ${qualityFilter === q.key
+                      ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]'
+                      : 'bg-[var(--color-canvas-soft)] text-muted-foreground border-[var(--color-hairline)] hover:border-[var(--color-primary)]'
+                    }`}
+                  >
+                    {q.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Admin-only: Kecamatan & Desa filter */}
             {userRole === 'SUPER_ADMIN' && (
               <div className="grid grid-cols-2 gap-3">
@@ -513,6 +598,7 @@ return (
     {/* Table vs Map vs IDW View */}
     {viewMode === 'map' || viewMode === 'idw' ? (
       <SinyalMap
+        qualityFilter={qualityFilter}
         selectedOperators={selectedOperators}
         selectedTeknologi={selectedTeknologi}
         selectedKecamatan={selectedKecamatan}

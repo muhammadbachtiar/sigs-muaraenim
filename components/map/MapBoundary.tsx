@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useMemo } from 'react'
 import { GeoJSON, useMap } from 'react-leaflet'
 import L from 'leaflet'
+import { useMapLayers } from './LeafletMapBase'
 
 type Props = {
   selectedKecamatanNama?: string
@@ -11,6 +12,8 @@ type Props = {
   desaList?: Array<{ id: string; nama: string }>
   onSelectKecamatan?: (id: string) => void
   onSelectDesa?: (id: string) => void
+  showBoundaryProp?: boolean
+  showMaskProp?: boolean
 }
 
 const cleanName = (name?: string) => {
@@ -28,8 +31,11 @@ export default function MapBoundary({
   desaList = [],
   onSelectKecamatan,
   onSelectDesa,
+  showBoundaryProp,
+  showMaskProp,
 }: Props) {
   const map = useMap()
+  const { showBoundary: ctxBoundary, showMask: ctxMask } = useMapLayers()
   const [kecamatanGeoJson, setKecamatanGeoJson] = useState<any>(null)
   const [desaGeoJson, setDesaGeoJson] = useState<any>(null)
 
@@ -49,8 +55,53 @@ export default function MapBoundary({
   const cleanKecFilter = useMemo(() => cleanName(selectedKecamatanNama), [selectedKecamatanNama])
   const cleanDesaFilter = useMemo(() => cleanName(selectedDesaNama), [selectedDesaNama])
 
-  // Filtered GeoJSON data to render on the map
+  const hasFilterSelection = Boolean(cleanKecFilter || cleanDesaFilter)
+
+  // Checklist state evaluation (respects prop override or context toggle)
+  const isBoundaryActive = showBoundaryProp !== undefined ? showBoundaryProp : (ctxBoundary || hasFilterSelection)
+  const isMaskActive = showMaskProp !== undefined ? showMaskProp : ctxMask
+
+  // Inverted Donut Mask: Dims outer areas softly (not gloomy, very gentle contrast)
+  const maskGeoJson = useMemo(() => {
+    if (!isMaskActive || !kecamatanGeoJson?.features?.length) return null
+
+    // Large bounding box covering the entire surrounding region
+    const outerRing = [
+      [70, -25],
+      [140, -25],
+      [140, 25],
+      [70, 25],
+      [70, -25],
+    ]
+
+    const holes: number[][][] = []
+
+    kecamatanGeoJson.features.forEach((feature: any) => {
+      if (!feature?.geometry) return
+      const { type, coordinates } = feature.geometry
+      if (type === 'Polygon') {
+        if (coordinates[0]) holes.push(coordinates[0])
+      } else if (type === 'MultiPolygon') {
+        coordinates.forEach((poly: any) => {
+          if (poly[0]) holes.push(poly[0])
+        })
+      }
+    })
+
+    return {
+      type: 'Feature',
+      properties: { isMask: true },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [outerRing, ...holes],
+      },
+    }
+  }, [isMaskActive, kecamatanGeoJson])
+
+  // Filtered GeoJSON data to render inside Muara Enim
   const renderedGeoJson = useMemo(() => {
+    if (!isBoundaryActive) return null
+
     if (cleanDesaFilter && desaGeoJson) {
       // Find matching village/desa boundary
       const filteredFeatures = desaGeoJson.features.filter((f: any) => {
@@ -83,56 +134,67 @@ export default function MapBoundary({
       }
     }
 
-    // Default: return all kecamatan borders for background context
+    // Default: return all kecamatan borders with red boundary lines
     return kecamatanGeoJson
-  }, [cleanKecFilter, cleanDesaFilter, kecamatanGeoJson, desaGeoJson])
+  }, [isBoundaryActive, cleanKecFilter, cleanDesaFilter, kecamatanGeoJson, desaGeoJson])
 
   // Auto zoom map to fit boundary bounds when selection changes
   useEffect(() => {
-    if (!renderedGeoJson || !map) return
+    if (!renderedGeoJson || !map || !hasFilterSelection) return
 
     try {
       const leafletGeoJSON = L.geoJSON(renderedGeoJson)
       const bounds = leafletGeoJSON.getBounds()
       if (bounds.isValid()) {
-        // Zoom to boundary with standard padding
         map.fitBounds(bounds, {
           animate: true,
-          padding: [35, 35],
-          maxZoom: 14, // Limit zoom on small desa boundaries
+          padding: [30, 30],
+          maxZoom: cleanDesaFilter ? 14 : cleanKecFilter ? 12 : 10,
         })
       }
     } catch (e) {
       console.warn('Gagal menyesuaikan bounds peta:', e)
     }
-  }, [renderedGeoJson, map])
+  }, [renderedGeoJson, map, hasFilterSelection, cleanKecFilter, cleanDesaFilter])
 
-  // Styles for the boundary polygon
+  // Dynamic Styles: Always using red colors as requested
   const style = useMemo(() => {
-    if (cleanDesaFilter) {
-      return {
-        color: '#dc2626', // Merah tegas (Red-600) untuk desa terpilih
-        weight: 3.5,
-        opacity: 0.9,
-        fillColor: '#dc2626',
-        fillOpacity: 0.15,
+    return (feature: any) => {
+      const fDesa = cleanName(feature?.properties?.kel_desa || feature?.properties?.nama || '')
+      const fKec = cleanName(feature?.properties?.kecamatan || feature?.properties?.nama || '')
+
+      // Desa Filter Active
+      if (cleanDesaFilter) {
+        const isTarget = fDesa === cleanDesaFilter
+        return {
+          color: isTarget ? '#dc2626' : '#f87171',
+          weight: isTarget ? 3.5 : 1,
+          opacity: isTarget ? 0.95 : 0.4,
+          fillColor: isTarget ? '#ef4444' : '#fca5a5',
+          fillOpacity: isTarget ? 0.22 : 0.04,
+        }
       }
-    }
-    if (cleanKecFilter) {
+
+      // Kecamatan Filter Active
+      if (cleanKecFilter) {
+        const isTarget = fKec === cleanKecFilter
+        return {
+          color: isTarget ? '#dc2626' : '#f87171',
+          weight: isTarget ? 3 : 1,
+          opacity: isTarget ? 0.9 : 0.35,
+          fillColor: isTarget ? '#ef4444' : '#fca5a5',
+          fillOpacity: isTarget ? 0.16 : 0.02,
+        }
+      }
+
+      // Default Overview of Kabupaten Muara Enim: Crisp Red boundaries
       return {
-        color: '#ef4444', // Merah (Red-500) untuk desa-desa di dalam kecamatan terpilih
-        weight: 2.5,
-        opacity: 0.8,
+        color: '#dc2626', // Merah tegas (Red-600)
+        weight: 1.8,
+        opacity: 0.85,
         fillColor: '#ef4444',
-        fillOpacity: 0.08,
+        fillOpacity: 0.04,
       }
-    }
-    return {
-      color: '#fca5a5', // Merah muda lembut (Red-300) untuk outline latar belakang
-      weight: 1.5,
-      opacity: 0.4,
-      fillColor: '#fca5a5',
-      fillOpacity: 0.01,
     }
   }, [cleanKecFilter, cleanDesaFilter])
 
@@ -142,24 +204,33 @@ export default function MapBoundary({
     const type = feature.properties.jenis_kd || (feature.properties.kel_desa ? 'Desa/Kelurahan' : 'Kecamatan')
 
     if (name) {
-      layer.bindTooltip(`<strong>${name}</strong><br/><span style="font-size: 10px; opacity: 0.8;">${type}</span>`, {
-        sticky: true,
-        direction: 'top',
-      })
+      layer.bindTooltip(
+        `<div style="font-family: inherit; padding: 2px 4px;">
+          <div style="font-weight: 700; font-size: 12px; color: #0f172a;">${name}</div>
+          <div style="font-size: 10px; color: #64748b;">${type} &bull; Kab. Muara Enim</div>
+        </div>`,
+        {
+          sticky: true,
+          direction: 'top',
+          className: 'custom-map-tooltip',
+        }
+      )
     }
 
     layer.on({
       mouseover: (e: any) => {
         const l = e.target
         l.setStyle({
-          color: '#b91c1c', // Merah gelap (Red-700) saat hover
-          weight: 4,
-          fillOpacity: 0.25,
+          color: '#b91c1c', // Merah pekat saat hover (Red-700)
+          weight: 2.8,
+          fillColor: '#ef4444',
+          fillOpacity: 0.2,
         })
       },
       mouseout: (e: any) => {
         const l = e.target
-        l.setStyle(style) // Kembalikan ke style asli
+        const defaultStyle = typeof style === 'function' ? style(feature) : style
+        l.setStyle(defaultStyle)
       },
       click: () => {
         const isDesaFeature = !!feature.properties.kel_desa
@@ -180,10 +251,29 @@ export default function MapBoundary({
     })
   }
 
-  if (!renderedGeoJson) return null
+  // Force re-creating component when filters or toggle change
+  const key = `${cleanKecFilter}-${cleanDesaFilter}-${isBoundaryActive}-${isMaskActive}-${!!kecamatanGeoJson}-${!!desaGeoJson}`
 
-  // Force re-creating component when filters load or change to refresh layer in Leaflet
-  const key = `${cleanKecFilter}-${cleanDesaFilter}-${!!kecamatanGeoJson}-${!!desaGeoJson}`
+  return (
+    <>
+      {/* Soft Outer Dimming Mask Layer (Gentle slate, not gloomy) */}
+      {maskGeoJson && (
+        <GeoJSON
+          key={`mask-${key}`}
+          data={maskGeoJson as any}
+          style={{
+            fillColor: '#334155', // Soft slate
+            fillOpacity: 0.14, // Sangat lembut & diredam, tidak suram
+            stroke: false,
+          }}
+          interactive={false}
+        />
+      )}
 
-  return <GeoJSON key={key} data={renderedGeoJson} style={style} onEachFeature={onEachFeature} />
+      {/* High-Contrast Interactive Muara Enim Red Boundary Layer */}
+      {renderedGeoJson && (
+        <GeoJSON key={key} data={renderedGeoJson} style={style as any} onEachFeature={onEachFeature} />
+      )}
+    </>
+  )
 }

@@ -282,3 +282,19 @@ body {
     @apply font-sans;
   }
 }
+
+/* ─── Leaflet Custom Map Tooltip ─── */
+.leaflet-tooltip.custom-map-tooltip {
+  background-color: rgba(255, 255, 255, 0.95);
+  border: 1px solid var(--color-hairline, rgba(0, 0, 0, 0.1));
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  border-radius: 8px;
+  padding: 4px 8px;
+  color: var(--color-ink, #0f172a);
+}
+
+.dark .leaflet-tooltip.custom-map-tooltip {
+  background-color: rgba(15, 23, 42, 0.95);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: #f8fafc;
+}

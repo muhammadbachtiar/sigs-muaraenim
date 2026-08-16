@@ -131,6 +131,7 @@ model RiwayatSinyal {
   @@index([desaKelurahanId])
   @@index([operatorId])
   @@index([tanggalPengukuran])
+  @@index([rsrp])
   @@map("riwayat_sinyal")
 }
 

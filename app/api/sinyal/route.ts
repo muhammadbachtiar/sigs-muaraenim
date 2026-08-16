@@ -10,40 +10,31 @@ export async function GET(request: Request) {
 
     const params = parseSearchParams(request)
 
-    const where: any = {}
+    const whereBase: any = {}
 
     // Tenant isolation: PEMDES hanya lihat data desanya — tidak bisa di-override
     if (user!.role === 'PEMDES' && user!.desaKelurahanId) {
-      where.desaKelurahanId = user!.desaKelurahanId
+      whereBase.desaKelurahanId = user!.desaKelurahanId
     } else if (user!.role === 'SUPER_ADMIN') {
       // Admin bisa filter by desa atau kecamatan
       const desaId = params.get('desa_id')
       const kecamatanId = params.get('kecamatan_id')
-      if (desaId) where.desaKelurahanId = desaId
-      if (kecamatanId) where.desaKelurahan = { kecamatanId }
+      if (desaId) whereBase.desaKelurahanId = desaId
+      if (kecamatanId) whereBase.desaKelurahan = { kecamatanId }
     }
 
     // Filter operator (bisa multi, comma-separated)
     const operatorIdParam = params.get('operator_id')
     if (operatorIdParam) {
       const ids = operatorIdParam.split(',').filter(Boolean)
-      where.operatorId = ids.length === 1 ? ids[0] : { in: ids }
+      whereBase.operatorId = ids.length === 1 ? ids[0] : { in: ids }
     }
 
     // Filter teknologi (bisa multi, comma-separated)
     const teknologiIdParam = params.get('teknologi_id')
     if (teknologiIdParam) {
       const ids = teknologiIdParam.split(',').filter(Boolean)
-      where.teknologiId = ids.length === 1 ? ids[0] : { in: ids }
-    }
-
-    // Filter RSRP range
-    const rsrpMin = params.get('rsrp_min')
-    const rsrpMax = params.get('rsrp_max')
-    if (rsrpMin || rsrpMax) {
-      where.rsrp = {}
-      if (rsrpMin) where.rsrp.gte = parseFloat(rsrpMin)
-      if (rsrpMax) where.rsrp.lte = parseFloat(rsrpMax)
+      whereBase.teknologiId = ids.length === 1 ? ids[0] : { in: ids }
     }
 
     // Filter tanggal range (manual override 6 bulan)
@@ -52,13 +43,13 @@ export async function GET(request: Request) {
     const allTime = params.get('all_time')
 
     if (tanggalDari || tanggalSampai) {
-      where.tanggalPengukuran = {}
-      if (tanggalDari) where.tanggalPengukuran.gte = new Date(tanggalDari)
-      if (tanggalSampai) where.tanggalPengukuran.lte = new Date(tanggalSampai)
+      whereBase.tanggalPengukuran = {}
+      if (tanggalDari) whereBase.tanggalPengukuran.gte = new Date(tanggalDari)
+      if (tanggalSampai) whereBase.tanggalPengukuran.lte = new Date(tanggalSampai)
     } else if (!allTime) {
       const defaultDate = new Date()
       defaultDate.setMonth(defaultDate.getMonth() - DEFAULT_DATA_MONTHS)
-      where.tanggalPengukuran = { gte: defaultDate }
+      whereBase.tanggalPengukuran = { gte: defaultDate }
     }
 
     // BBOX filter
@@ -67,8 +58,30 @@ export async function GET(request: Request) {
     const minLng = params.get('minLng')
     const maxLng = params.get('maxLng')
     if (minLat && maxLat && minLng && maxLng) {
-      where.latitude = { gte: parseFloat(minLat), lte: parseFloat(maxLat) }
-      where.longitude = { gte: parseFloat(minLng), lte: parseFloat(maxLng) }
+      whereBase.latitude = { gte: parseFloat(minLat), lte: parseFloat(maxLat) }
+      whereBase.longitude = { gte: parseFloat(minLng), lte: parseFloat(maxLng) }
+    }
+
+    // Clone whereBase untuk query data yang difilter
+    const where: any = { ...whereBase }
+
+    // Filter Kualitas Sinyal (Quality / RSRP Category: GOOD, FAIR, POOR)
+    const quality = params.get('quality')?.toUpperCase()
+    if (quality === 'GOOD') {
+      where.rsrp = { gte: -85 }
+    } else if (quality === 'FAIR') {
+      where.rsrp = { lt: -85, gte: -99 }
+    } else if (quality === 'POOR') {
+      where.rsrp = { lt: -99 }
+    } else {
+      // Filter RSRP range numerik manual jika ada
+      const rsrpMin = params.get('rsrp_min')
+      const rsrpMax = params.get('rsrp_max')
+      if (rsrpMin || rsrpMax) {
+        where.rsrp = {}
+        if (rsrpMin) where.rsrp.gte = parseFloat(rsrpMin)
+        if (rsrpMax) where.rsrp.lte = parseFloat(rsrpMax)
+      }
     }
 
     // Mode peta: skip pagination, return field minimal, max 5000
@@ -93,7 +106,8 @@ export async function GET(request: Request) {
 
     const { page, pageSize, skip, take } = parsePagination(params)
 
-    const [data, total] = await Promise.all([
+    // Eksekusi data dan agregasi statistik global database secara paralel
+    const [data, totalFiltered, totalAll, totalGood, totalFair, totalPoor] = await Promise.all([
       prisma.riwayatSinyal.findMany({
         where,
         skip,
@@ -108,14 +122,23 @@ export async function GET(request: Request) {
         },
       }),
       prisma.riwayatSinyal.count({ where }),
+      prisma.riwayatSinyal.count({ where: whereBase }),
+      prisma.riwayatSinyal.count({ where: { ...whereBase, rsrp: { gte: -85 } } }),
+      prisma.riwayatSinyal.count({ where: { ...whereBase, rsrp: { lt: -85, gte: -99 } } }),
+      prisma.riwayatSinyal.count({ where: { ...whereBase, rsrp: { lt: -99 } } }),
     ])
 
-    return successResponse(data, 'Data sinyal berhasil diambil', paginationMeta(total, page, pageSize))
+    return successResponse(data, 'Data sinyal berhasil diambil', {
+      ...paginationMeta(totalFiltered, page, pageSize),
+      totalAll,
+      totalGood,
+      totalFair,
+      totalPoor,
+    })
   } catch {
     return serverErrorResponse()
   }
 }
-
 
 export async function POST(request: Request) {
   try {
