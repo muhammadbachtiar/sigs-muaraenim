@@ -89,8 +89,8 @@ export default function DashboardMap({ onSelectSinyalDetail, onSelectTowerDetail
                 type="button"
                 onClick={() => setMode(item.key as ViewMode)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 font-medium rounded-md transition-all ${isActive
-                    ? 'bg-[var(--color-primary)] text-white shadow-xs'
-                    : 'text-muted-foreground hover:text-foreground'
+                  ? 'bg-[var(--color-primary)] text-white shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
                   }`}
               >
                 <Icon size={13} />

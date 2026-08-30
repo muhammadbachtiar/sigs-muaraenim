@@ -68,9 +68,9 @@ export async function GET(request: Request) {
     // Filter Kualitas Sinyal (Quality / RSRP Category: GOOD, FAIR, POOR)
     const quality = params.get('quality')?.toUpperCase()
     if (quality === 'GOOD') {
-      where.rsrp = { gte: -85 }
+      where.rsrp = { gt: -85 }
     } else if (quality === 'FAIR') {
-      where.rsrp = { lt: -85, gte: -99 }
+      where.rsrp = { lte: -85, gte: -99 }
     } else if (quality === 'POOR') {
       where.rsrp = { lt: -99 }
     } else {
@@ -123,8 +123,8 @@ export async function GET(request: Request) {
       }),
       prisma.riwayatSinyal.count({ where }),
       prisma.riwayatSinyal.count({ where: whereBase }),
-      prisma.riwayatSinyal.count({ where: { ...whereBase, rsrp: { gte: -85 } } }),
-      prisma.riwayatSinyal.count({ where: { ...whereBase, rsrp: { lt: -85, gte: -99 } } }),
+      prisma.riwayatSinyal.count({ where: { ...whereBase, rsrp: { gt: -85 } } }),
+      prisma.riwayatSinyal.count({ where: { ...whereBase, rsrp: { lte: -85, gte: -99 } } }),
       prisma.riwayatSinyal.count({ where: { ...whereBase, rsrp: { lt: -99 } } }),
     ])
 

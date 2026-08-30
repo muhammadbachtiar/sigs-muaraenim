@@ -2085,14 +2085,14 @@ function TowerPage() {
           ========================================================== */}
       <Dialog open={showDetailModal} onOpenChange={setShowDetailModal}>
         <DialogContent className="sm:max-w-[650px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <TowerControl size={20} className="text-primary" />
+          <DialogHeader className="pr-8 space-y-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <DialogTitle className="flex items-center gap-2">
+                <TowerControl size={20} className="text-primary shrink-0" />
                 <span>Detail Tower Telepon</span>
-              </span>
+              </DialogTitle>
               {detailTower && renderStatusBadge(detailTower.statusVerifikasi)}
-            </DialogTitle>
+            </div>
             <DialogDescription>
               Informasi lengkap teknis, penanggung jawab, serta foto dokumentasi site.
             </DialogDescription>

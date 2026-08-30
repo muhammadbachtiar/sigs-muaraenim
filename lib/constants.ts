@@ -1,8 +1,8 @@
 // Warna marker berdasarkan RSRP (dBm)
 export const SIGNAL_COLORS = {
   GOOD: { label: 'Baik', color: '#22c55e', min: -85, max: 0 },
-  FAIR: { label: 'Sedang', color: '#eab308', min: -99, max: -86 },
-  POOR: { label: 'Buruk', color: '#ef4444', min: -200, max: -100 },
+  FAIR: { label: 'Sedang', color: '#eab308', min: -99, max: -85 },
+  POOR: { label: 'Buruk', color: '#ef4444', min: -200, max: -99 },
 } as const
 
 export function getSignalColor(rsrp: number | null) {

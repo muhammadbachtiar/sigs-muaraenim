@@ -380,7 +380,7 @@ function LoginForm() {
                       background: s.color, display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
                       <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-                        <path d="M1 4l2 2 4-4" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M1 4l2 2 4-4" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     </div>
                   )}
@@ -401,9 +401,6 @@ function LoginForm() {
               )
             })}
           </div>
-          <p style={{ fontSize: '0.6875rem', color: 'var(--color-ink-faint)', textAlign: 'center', marginTop: '12px' }}>
-            Pilih aksi cepat di atas, sistem akan meminta login terlebih dahulu
-          </p>
         </div>
       </div>
 

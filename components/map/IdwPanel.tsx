@@ -109,7 +109,6 @@ export default function IdwPanel({
 }: Props) {
   // State panel
   const [isMinimized, setIsMinimized] = useState(false)
-  const [isFullscreen, setIsFullscreen] = useState(false)
   const [activeTab, setActiveTab] = useState<'single' | 'grid'>('single')
   const [showInfoModal, setShowInfoModal] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
@@ -319,12 +318,12 @@ export default function IdwPanel({
       {/* Educational Modal */}
       {showInfoModal && <IdwInfoModal onClose={() => setShowInfoModal(false)} />}
 
-      {/* Floating Panel — desktop: top-left, mobile: bottom sheet */}
+      {/* Floating Panel — desktop: top-left (offset from Leaflet zoom buttons), mobile: bottom sheet */}
       <div
         className={`z-[450] bg-white/98 dark:bg-gray-900/98 backdrop-blur-md border border-[var(--color-hairline)] shadow-elevated overflow-hidden ${
           isMobile
             ? 'fixed bottom-0 left-0 right-0 w-full rounded-t-2xl max-h-[55vh] flex flex-col border-t-2'
-            : 'absolute top-3 left-3 w-72 rounded-2xl'
+            : 'absolute top-3 left-14 w-72 sm:w-80 rounded-2xl'
         }`}
         style={{ fontFamily: 'Inter, sans-serif' }}
       >
@@ -342,24 +341,6 @@ export default function IdwPanel({
             <span className="text-xs font-bold tracking-tight">Analisis IDW</span>
           </div>
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => {
-                const mapContainer = document.querySelector('.leaflet-container')?.parentElement
-                if (mapContainer) {
-                  if (!isFullscreen) {
-                    mapContainer.requestFullscreen?.()
-                    setIsFullscreen(true)
-                  } else {
-                    document.exitFullscreen?.()
-                    setIsFullscreen(false)
-                  }
-                }
-              }}
-              className="p-1 rounded hover:bg-white/20 transition-colors"
-              title={isFullscreen ? 'Keluar Fullscreen' : 'Peta Layar Penuh'}
-            >
-              {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-            </button>
             <button
               onClick={() => setShowInfoModal(true)}
               className="p-1 rounded hover:bg-white/20 transition-colors"

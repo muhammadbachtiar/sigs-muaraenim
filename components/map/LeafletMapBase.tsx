@@ -1,10 +1,10 @@
 'use client'
 
-import React, { useEffect, useState, createContext, useContext } from 'react'
+import React, { useEffect, useState, createContext, useContext, useRef } from 'react'
 import { MapContainer, TileLayer, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { MAP_CENTER } from '@/lib/constants'
-import { Layers, Map as MapIcon, Globe, CheckSquare, Square } from 'lucide-react'
+import { Layers, Map as MapIcon, Globe, CheckSquare, Square, Maximize2, Minimize2 } from 'lucide-react'
 
 export type BasemapType = 'clean' | 'osm' | 'satellite'
 
@@ -35,6 +35,7 @@ type Props = {
   className?: string
   enableBasemapSwitcher?: boolean
   enableLayerControls?: boolean
+  enableFullscreen?: boolean
   defaultBasemap?: BasemapType
   defaultShowBoundary?: boolean
   defaultShowMask?: boolean
@@ -108,6 +109,7 @@ export default function LeafletMapBase({
   className = '',
   enableBasemapSwitcher = true,
   enableLayerControls = true,
+  enableFullscreen = true,
   defaultBasemap = 'osm', // Default adalah opsi jalan sesuai permintaan
   defaultShowBoundary = true, // Default tidak check garis batas
   defaultShowMask = false, // Default tidak check fokus wilayah
@@ -116,6 +118,25 @@ export default function LeafletMapBase({
   const [basemap, setBasemap] = useState<BasemapType>(defaultBasemap)
   const [showBoundary, setShowBoundary] = useState<boolean>(defaultShowBoundary)
   const [showMask, setShowMask] = useState<boolean>(defaultShowMask)
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement))
+    }
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  }, [])
+
+  const toggleFullscreen = () => {
+    if (!containerRef.current) return
+    if (!document.fullscreenElement) {
+      containerRef.current.requestFullscreen?.().catch(() => {})
+    } else {
+      document.exitFullscreen?.().catch(() => {})
+    }
+  }
 
   const currentTile = BASEMAP_CONFIGS[basemap]
 
@@ -131,8 +152,9 @@ export default function LeafletMapBase({
       }}
     >
       <div
+        ref={containerRef}
         className={`relative w-full overflow-hidden rounded-xl border border-[var(--color-hairline)] shadow-soft z-0 ${className}`}
-        style={{ height }}
+        style={{ height: isFullscreen ? '100vh' : height }}
       >
         <MapContainer
           center={center}
@@ -151,6 +173,18 @@ export default function LeafletMapBase({
           <MapViewController center={center} zoom={zoom} />
           {children}
         </MapContainer>
+
+        {/* Universal Fullscreen Map Toggle Button */}
+        {enableFullscreen && (
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            className="absolute top-3 right-3 z-[400] bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border border-[var(--color-hairline)] shadow-md rounded-lg p-2 text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-all flex items-center justify-center cursor-pointer"
+            title={isFullscreen ? 'Keluar Layar Penuh (ESC)' : 'Layar Penuh (Fullscreen)'}
+          >
+            {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+          </button>
+        )}
 
         {/* Floating Basemap & Layer Checklist Controls */}
         {enableLayerControls && (

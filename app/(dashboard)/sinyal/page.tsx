@@ -310,7 +310,7 @@ const exportCsv = () => {
 return (
   <div className="space-y-6 animate-in fade-in duration-500">
     {/* Page Header */}
-    <div className="flex flex-wrap items-start justify-between gap-4">
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>
         <h1 className="text-xl font-bold text-foreground tracking-tight flex items-center gap-2">
           <Signal size={20} className="text-[var(--color-primary)]" />
@@ -323,7 +323,7 @@ return (
           }
         </p>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
         {/* View Mode Switcher */}
         <div className="flex items-center border border-[var(--color-hairline)] rounded-lg p-0.5 bg-[var(--color-surface)] shadow-xs">
           <button
@@ -384,14 +384,14 @@ return (
         {
           key: 'GOOD' as const,
           label: 'Sinyal Baik',
-          sub: '≥ -85 dBm',
+          sub: '> -85 dBm',
           value: meta?.totalGood ?? 0,
           color: '#22c55e',
         },
         {
           key: 'FAIR' as const,
           label: 'Sinyal Sedang',
-          sub: '-86 s/d -99 dBm',
+          sub: '-85 s/d -99 dBm',
           value: meta?.totalFair ?? 0,
           color: '#eab308',
         },
@@ -476,8 +476,8 @@ return (
               <div className="flex flex-wrap gap-1.5">
                 {[
                   { key: 'ALL' as const, label: 'Semua Kualitas' },
-                  { key: 'GOOD' as const, label: 'Sinyal Baik (≥ -85 dBm)' },
-                  { key: 'FAIR' as const, label: 'Sinyal Sedang (-86 s/d -99 dBm)' },
+                  { key: 'GOOD' as const, label: 'Sinyal Baik (> -85 dBm)' },
+                  { key: 'FAIR' as const, label: 'Sinyal Sedang (-85 s/d -99 dBm)' },
                   { key: 'POOR' as const, label: 'Sinyal Buruk (< -99 dBm)' },
                 ].map((q) => (
                   <button
@@ -495,15 +495,24 @@ return (
               </div>
             </div>
 
-            {/* Admin-only: Kecamatan & Desa filter */}
+            {/* Admin-only: Smart Search Kecamatan & Desa filter */}
             {userRole === 'SUPER_ADMIN' && (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-muted-foreground mb-1 block">Kecamatan</label>
                   <SearchableSelect
                     options={kecamatanList.map(k => ({ value: k.id, label: k.nama }))}
                     value={selectedKecamatan}
-                    onChange={val => { setSelectedKecamatan(val); setSelectedDesa(''); setPage(1) }}
+                    onChange={val => {
+                      setSelectedKecamatan(val)
+                      if (selectedDesa) {
+                        const matched = desaList.find(d => d.id === selectedDesa)
+                        if (matched && matched.kecamatanId !== val) {
+                          setSelectedDesa('')
+                        }
+                      }
+                      setPage(1)
+                    }}
                     placeholder="Semua Kecamatan"
                     searchPlaceholder="Cari kecamatan..."
                   />
@@ -511,12 +520,27 @@ return (
                 <div>
                   <label className="text-xs text-muted-foreground mb-1 block">Desa/Kelurahan</label>
                   <SearchableSelect
-                    options={filteredDesa.map(d => ({ value: d.id, label: d.nama }))}
+                    options={desaList
+                      .filter(d => !selectedKecamatan || d.kecamatanId === selectedKecamatan)
+                      .map(d => ({
+                        value: d.id,
+                        label: selectedKecamatan ? d.nama : `${(d as any).kecamatan?.nama || 'Desa'} / ${d.nama}`
+                      }))
+                    }
                     value={selectedDesa}
-                    onChange={val => { setSelectedDesa(val); setPage(1) }}
+                    onChange={val => {
+                      if (val) {
+                        const matchedDesa = desaList.find(d => d.id === val)
+                        const kecId = matchedDesa?.kecamatanId || (matchedDesa as any)?.kecamatan?.id
+                        if (kecId && !selectedKecamatan) {
+                          setSelectedKecamatan(kecId)
+                        }
+                      }
+                      setSelectedDesa(val)
+                      setPage(1)
+                    }}
                     placeholder="Semua Desa"
                     searchPlaceholder="Cari desa..."
-                    disabled={!selectedKecamatan}
                   />
                 </div>
               </div>
