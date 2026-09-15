@@ -77,6 +77,19 @@ export default function DesaPanel({
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
+  // Listen for header "Tambah" button trigger
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail
+      if (detail?.tab === 'desa') {
+        resetForm()
+        setShowAddModal(true)
+      }
+    }
+    document.addEventListener('master:open-add', handler)
+    return () => document.removeEventListener('master:open-add', handler)
+  }, [])
+
   // Dropdown states for multi-select Kecamatan filter
   const [allKecamatans, setAllKecamatans] = useState<KecamatanItem[]>([])
   const [dropdownOpen, setDropdownOpen] = useState(false)
@@ -315,16 +328,8 @@ export default function DesaPanel({
           </div>
         )}
 
-        <div className="ml-auto flex items-center gap-3 justify-between md:justify-end">
+        <div className="ml-auto flex items-center gap-3 shrink-0">
           <span className="text-xs text-muted-foreground whitespace-nowrap">{total} data</span>
-          <Button
-            size="sm"
-            onClick={() => { resetForm(); setShowAddModal(true) }}
-            className="h-9 px-4"
-          >
-            <Plus size={16} className="mr-1.5" />
-            Tambah {title}
-          </Button>
         </div>
       </div>
 

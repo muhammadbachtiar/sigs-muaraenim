@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Radio, Cpu, Cable, MapPin, Building2, Loader2 } from 'lucide-react'
+import { Radio, Cpu, Cable, MapPin, Building2, Loader2, Database, Plus } from 'lucide-react'
 import MasterPanel from '@/components/dashboard/MasterPanel'
 import KecamatanPanel from '@/components/dashboard/KecamatanPanel'
 import DesaPanel from '@/components/dashboard/DesaPanel'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Button } from '@/components/ui/button'
 import { type ActionResult } from '@/lib/actions/master'
 
 type MasterItem = { id: number; nama: string }
@@ -295,18 +296,41 @@ export default function MasterPage() {
     },
   ]
 
+  const [activeTab, setActiveTab] = useState('operator')
+
+  const activeTabConfig = tabs.find(t => t.value === activeTab)
+  const activeTabState = activeTabConfig?.state
+
+  const handleHeaderAdd = () => {
+    // Trigger the add action for the active tab's panel via a custom event
+    document.dispatchEvent(new CustomEvent('master:open-add', { detail: { tab: activeTab } }))
+  }
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       {/* Page Header */}
-      <div>
-        <h1 className="text-xl font-bold text-foreground tracking-tight">Master Data</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Kelola data referensi sistem — Operator, Teknologi, Media Transmisi, Kecamatan, dan Desa/Kelurahan
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-foreground tracking-tight flex items-center gap-2">
+            <Database size={20} className="text-[var(--color-primary)]" />
+            Master Data
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Kelola data referensi sistem — Operator, Teknologi, Media Transmisi, Kecamatan, dan Desa/Kelurahan
+          </p>
+        </div>
+        <Button
+          size="sm"
+          className="gap-1.5 text-xs self-start sm:self-auto"
+          onClick={handleHeaderAdd}
+        >
+          <Plus size={14} />
+          Tambah {activeTabConfig?.label ?? 'Data'}
+        </Button>
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="operator" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="mb-5 flex-wrap h-auto gap-1 bg-[var(--color-canvas-soft)] p-1 rounded-lg">
           {tabs.map((tab) => {
             const Icon = tab.icon

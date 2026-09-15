@@ -309,7 +309,7 @@ const exportCsv = () => {
 
 return (
   <div className="space-y-6 animate-in fade-in duration-500">
-    {/* Page Header */}
+    {/* 1. Page Header & Main Actions */}
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>
         <h1 className="text-xl font-bold text-foreground tracking-tight flex items-center gap-2">
@@ -324,38 +324,6 @@ return (
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-        {/* View Mode Switcher */}
-        <div className="flex items-center border border-[var(--color-hairline)] rounded-lg p-0.5 bg-[var(--color-surface)] shadow-xs">
-          <button
-            onClick={() => setViewMode('table')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${viewMode === 'table'
-              ? 'bg-[var(--color-primary)] text-white shadow-xs'
-              : 'text-muted-foreground hover:text-foreground'
-              }`}
-          >
-            <List size={14} /> Tabel
-          </button>
-          <button
-            onClick={() => setViewMode('map')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${viewMode === 'map'
-              ? 'bg-[var(--color-primary)] text-white shadow-xs'
-              : 'text-muted-foreground hover:text-foreground'
-              }`}
-          >
-            <Map size={14} /> Peta
-          </button>
-          <button
-            onClick={() => setViewMode('idw')}
-            title="Analisis prediksi sinyal dengan algoritma IDW"
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${viewMode === 'idw'
-              ? 'bg-purple-600 text-white shadow-xs'
-              : 'text-muted-foreground hover:text-foreground'
-              }`}
-          >
-            <Brain size={14} /> IDW
-          </button>
-        </div>
-
         <Button variant="outline" size="sm" onClick={exportCsv} className="gap-1.5 text-xs">
           <Download size={14} /> Export CSV
         </Button>
@@ -371,7 +339,7 @@ return (
       </div>
     </div>
 
-    {/* Stats Cards (Interactive Quality Selector) */}
+    {/* 2. Stats Cards (Interactive Quality Selector) */}
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
       {[
         {
@@ -380,6 +348,7 @@ return (
           sub: 'Semua Kategori',
           value: meta?.totalAll ?? meta?.total ?? 0,
           color: '#0075de',
+          Icon: Signal,
         },
         {
           key: 'GOOD' as const,
@@ -387,6 +356,7 @@ return (
           sub: '> -85 dBm',
           value: meta?.totalGood ?? 0,
           color: '#22c55e',
+          Icon: Signal,
         },
         {
           key: 'FAIR' as const,
@@ -394,6 +364,7 @@ return (
           sub: '-85 s/d -99 dBm',
           value: meta?.totalFair ?? 0,
           color: '#eab308',
+          Icon: Signal,
         },
         {
           key: 'POOR' as const,
@@ -401,6 +372,7 @@ return (
           sub: '< -99 dBm',
           value: meta?.totalPoor ?? 0,
           color: '#ef4444',
+          Icon: Signal,
         },
       ].map((s) => {
         const isActive = qualityFilter === s.key
@@ -409,38 +381,38 @@ return (
             key={s.key}
             type="button"
             onClick={() => handleQualityCardClick(s.key)}
-            className={`flex flex-col text-left px-4 py-3 rounded-xl border transition-all duration-200 cursor-pointer group hover:scale-[1.02] hover:shadow-elevated ${
+            className={`flex flex-col text-left px-4 py-3 rounded-xl border transition-all duration-200 cursor-pointer hover:scale-[1.02] hover:shadow-elevated ${
               isActive
-                ? 'border-primary ring-1 ring-primary/40 shadow-soft bg-card'
+                ? 'border-primary ring-1 ring-primary/30 shadow-soft bg-card'
                 : 'border-[var(--color-hairline)] bg-[var(--color-surface)] shadow-soft hover:border-[var(--color-primary)]/40'
             }`}
           >
             <div className="flex items-center justify-between w-full">
-              <span className="text-xs font-semibold text-muted-foreground group-hover:text-foreground transition-colors">
-                {s.label}
-              </span>
+              <span className="text-xs font-semibold text-muted-foreground">{s.label}</span>
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: `${s.color}18` }}>
+                <s.Icon size={15} style={{ color: s.color }} />
+              </div>
             </div>
-            <div className="flex items-baseline justify-between mt-1 w-full">
+            <div className="flex items-baseline justify-between mt-1.5 w-full">
               <span className="text-2xl font-bold font-mono tracking-tight" style={{ color: s.color }}>
                 {s.value.toLocaleString('id-ID')}
               </span>
-              <span className="text-[10px] text-muted-foreground font-medium">
-                {s.sub}
-              </span>
+              <span className="text-[10px] text-muted-foreground font-medium">{s.sub}</span>
             </div>
+            {isActive && (
+              <p className="text-[10px] text-[var(--color-primary)] font-medium mt-1">Filter aktif ✓</p>
+            )}
           </button>
         )
       })}
     </div>
 
-    {/* Filter & Search */}
-    <Card className="border-hairline shadow-soft">
-      <CardContent className="p-4 space-y-3">
+    {/* 3 & 4. Toolbar: Filter controls (left) + View Mode Switcher (right) */}
+    <div className="flex flex-col gap-3">
+      {/* Main toolbar row */}
+      <div className="flex items-center justify-between gap-3">
+        {/* Left: Filter controls */}
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex-1 min-w-[160px] relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-            <span className="text-xs text-muted-foreground pl-9 py-2 block">Filter menggunakan panel di bawah</span>
-          </div>
           <button
             onClick={() => setShowFilter(prev => !prev)}
             className={`flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border transition-colors ${showFilter || hasFilters
@@ -467,9 +439,40 @@ return (
           )}
         </div>
 
-        {/* Expanded filter panel */}
-        {showFilter && (
-          <div className="border-t border-[var(--color-hairline)] pt-3 space-y-3">
+        {/* Right: View Mode Switcher */}
+        <div className="flex items-center border border-[var(--color-hairline)] rounded-lg p-0.5 bg-[var(--color-surface)] shadow-xs shrink-0">
+          <button
+            onClick={() => setViewMode('table')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+              viewMode === 'table' ? 'bg-[var(--color-primary)] text-white shadow-xs' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <List size={14} /> Tabel
+          </button>
+          <button
+            onClick={() => setViewMode('map')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+              viewMode === 'map' ? 'bg-[var(--color-primary)] text-white shadow-xs' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Map size={14} /> Peta
+          </button>
+          <button
+            onClick={() => setViewMode('idw')}
+            title="Analisis prediksi sinyal dengan algoritma IDW"
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+              viewMode === 'idw' ? 'bg-purple-600 text-white shadow-xs' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Brain size={14} /> IDW
+          </button>
+        </div>
+      </div>
+
+      {/* Expanded filter panel — separate card below toolbar */}
+      {showFilter && (
+        <Card className="border-hairline shadow-soft">
+          <CardContent className="p-4 space-y-3">
             {/* Filter Kualitas Sinyal (Chips) */}
             <div>
               <label className="text-xs text-muted-foreground mb-1.5 block">Kualitas Sinyal</label>
@@ -614,10 +617,10 @@ return (
                 <p className="text-xs text-[var(--color-warning)]">Data default dibatasi 6 bulan terakhir. Pilih rentang tanggal untuk melihat data lebih lama.</p>
               </div>
             )}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          </CardContent>
+        </Card>
+      )}
+    </div>
 
     {/* Table vs Map vs IDW View */}
     {viewMode === 'map' || viewMode === 'idw' ? (

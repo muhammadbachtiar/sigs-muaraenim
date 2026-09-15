@@ -13,7 +13,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import SearchableSelect from '@/components/ui/searchable-select'
@@ -393,50 +393,46 @@ export default function UserManagementPage() {
         </Button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="border-hairline shadow-soft bg-gradient-to-br from-primary/5 via-transparent to-transparent">
-          <CardContent className="flex items-center justify-between p-5">
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Total User Pemdes</p>
-              <div className="text-3xl font-bold font-mono mt-1 text-foreground">{totalUsers}</div>
-            </div>
-            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-              <Users size={20} />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-hairline shadow-soft bg-gradient-to-br from-success/5 via-transparent to-transparent">
-          <CardContent className="flex items-center justify-between p-5">
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">User Aktif</p>
-              <div className="text-3xl font-bold font-mono mt-1 text-success">
-                {totalActive}
+      {/* Stats Cards — Standardized & Clickable */}
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { key: 'ALL' as const, label: 'Total User Pemdes', sub: 'Semua Akun', value: totalUsers, color: '#0075de', Icon: Users },
+          { key: 'ACTIVE' as const, label: 'User Aktif', sub: 'Akun Terverifikasi', value: totalActive, color: '#16a34a', Icon: UserCheck },
+          { key: 'INACTIVE' as const, label: 'User Nonaktif', sub: 'Akun Dinonaktifkan', value: totalInactive, color: '#dc2626', Icon: UserX },
+        ].map((s) => {
+          const isActive = statusFilter === s.key
+          return (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => { setStatusFilter(s.key); setPage(1) }}
+              className={`flex flex-col text-left px-4 py-3 rounded-xl border transition-all duration-200 cursor-pointer hover:scale-[1.02] hover:shadow-elevated ${
+                isActive
+                  ? 'border-primary ring-1 ring-primary/30 shadow-soft bg-card'
+                  : 'border-[var(--color-hairline)] bg-[var(--color-surface)] shadow-soft hover:border-[var(--color-primary)]/40'
+              }`}
+            >
+              <div className="flex items-center justify-between w-full">
+                <span className="text-xs font-semibold text-muted-foreground">{s.label}</span>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: `${s.color}18` }}>
+                  <s.Icon size={16} style={{ color: s.color }} />
+                </div>
               </div>
-            </div>
-            <div className="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center text-success">
-              <UserCheck size={20} />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-hairline shadow-soft bg-gradient-to-br from-destructive/5 via-transparent to-transparent">
-          <CardContent className="flex items-center justify-between p-5">
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">User Nonaktif</p>
-              <div className="text-3xl font-bold font-mono mt-1 text-destructive">
-                {totalInactive}
+              <div className="flex items-baseline justify-between mt-1.5 w-full">
+                <span className="text-2xl font-bold font-mono tracking-tight" style={{ color: s.color }}>
+                  {s.value.toLocaleString('id-ID')}
+                </span>
+                <span className="text-[10px] text-muted-foreground font-medium">{s.sub}</span>
               </div>
-            </div>
-            <div className="w-10 h-10 rounded-lg bg-destructive/10 flex items-center justify-center text-destructive">
-              <UserX size={20} />
-            </div>
-          </CardContent>
-        </Card>
+              {isActive && (
+                <p className="text-[10px] text-[var(--color-primary)] font-medium mt-1">Filter aktif ✓</p>
+              )}
+            </button>
+          )
+        })}
       </div>
 
-      {/* Toolbar */}
+      {/* Search & Filter Bar */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
         {/* Search */}
         <div className="relative flex-1 max-w-sm">
@@ -449,25 +445,16 @@ export default function UserManagementPage() {
           />
         </div>
 
-        {/* Status Filter */}
-        <div className="flex border border-hairline rounded-lg p-0.5 bg-[var(--color-surface)] shadow-xs">
-          {[
-            { value: 'ALL', label: 'Semua Status' },
-            { value: 'ACTIVE', label: 'Aktif' },
-            { value: 'INACTIVE', label: 'Nonaktif' },
-          ].map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => { setStatusFilter(opt.value as any); setPage(1) }}
-              className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${statusFilter === opt.value
-                ? 'bg-primary text-primary-foreground shadow-xs'
-                : 'text-muted-foreground hover:text-foreground'
-                }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
+        {(statusFilter !== 'ALL' || searchQuery) && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => { setStatusFilter('ALL'); setSearchQuery(''); setPage(1) }}
+            className="h-9 px-3 text-xs text-muted-foreground hover:text-red-500"
+          >
+            <X size={14} className="mr-1" /> Reset Filter
+          </Button>
+        )}
       </div>
 
       {/* Users Table */}

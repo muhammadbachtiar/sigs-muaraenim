@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, Pencil, Trash2, Package, AlertCircle, Search, ChevronLeft, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
 import { type ActionResult } from '@/lib/actions/master'
@@ -52,6 +52,21 @@ export default function KecamatanPanel({
   const [kodeValue, setKodeValue] = useState('')
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+
+  // Listen for header "Tambah" button trigger
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail
+      if (detail?.tab === 'kecamatan') {
+        setNamaValue('')
+        setKodeValue('')
+        setFormError('')
+        setShowAddModal(true)
+      }
+    }
+    document.addEventListener('master:open-add', handler)
+    return () => document.removeEventListener('master:open-add', handler)
+  }, [])
 
   const handleAdd = async () => {
     if (!namaValue.trim()) {
@@ -118,7 +133,7 @@ export default function KecamatanPanel({
 
   return (
     <div className="space-y-4 animate-in fade-in duration-300">
-      {/* Toolbar: search + add button */}
+      {/* Toolbar: search + data count */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
         <div className="relative flex-1 w-full sm:max-w-xs">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -129,17 +144,7 @@ export default function KecamatanPanel({
             className="pl-9 h-9 text-sm"
           />
         </div>
-        <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-          <span className="text-xs text-muted-foreground">{total} data</span>
-          <Button
-            size="sm"
-            onClick={() => { setNamaValue(''); setKodeValue(''); setFormError(''); setShowAddModal(true) }}
-            className="h-9 px-4"
-          >
-            <Plus size={16} className="mr-1.5" />
-            Tambah {title}
-          </Button>
-        </div>
+        <span className="text-xs text-muted-foreground">{total} data</span>
       </div>
 
       {/* Table */}

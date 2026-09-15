@@ -898,183 +898,122 @@ function TowerPage() {
         </Button>
       </div>
 
-      {/* Stats Cards (Informative Overview) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-hairline shadow-soft bg-gradient-to-br from-primary/5 via-transparent to-transparent">
-          <CardContent className="flex items-center justify-between p-5">
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Total Tower</p>
-              <div className="text-3xl font-bold font-mono mt-1 text-foreground">{totalAll.toLocaleString('id-ID')}</div>
-              <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">Semua Status</p>
-            </div>
-            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-              <TowerControl size={20} />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-hairline shadow-soft bg-gradient-to-br from-amber-500/5 via-transparent to-transparent">
-          <CardContent className="flex items-center justify-between p-5">
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Perlu Verifikasi</p>
-              <div className="text-3xl font-bold font-mono mt-1 text-amber-600 dark:text-amber-400">
-                {totalPending.toLocaleString('id-ID')}
+      {/* Stats Cards — Standardized & Clickable */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          { key: 'ALL' as const, label: 'Total Tower', sub: 'Semua Status', value: totalAll, color: '#0075de', Icon: TowerControl },
+          { key: 'PENDING' as const, label: 'Perlu Verifikasi', sub: 'Menunggu Persetujuan', value: totalPending, color: '#d97706', Icon: Clock },
+          { key: 'APPROVED' as const, label: 'Disetujui', sub: 'Terverifikasi Aktif', value: totalApproved, color: '#16a34a', Icon: CheckCircle2 },
+          { key: 'REJECTED' as const, label: 'Ditolak / Revisi', sub: 'Perlu Perbaikan Data', value: totalRejected, color: '#dc2626', Icon: XCircle },
+        ].map((s) => {
+          const isActive = statusFilter === s.key
+          return (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => { setStatusFilter(s.key); setPage(1) }}
+              className={`flex flex-col text-left px-4 py-3 rounded-xl border transition-all duration-200 cursor-pointer hover:scale-[1.02] hover:shadow-elevated ${
+                isActive
+                  ? 'border-primary ring-1 ring-primary/30 shadow-soft bg-card'
+                  : 'border-[var(--color-hairline)] bg-[var(--color-surface)] shadow-soft hover:border-[var(--color-primary)]/40'
+              }`}
+            >
+              <div className="flex items-center justify-between w-full">
+                <span className="text-xs font-semibold text-muted-foreground">{s.label}</span>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: `${s.color}18` }}>
+                  <s.Icon size={16} style={{ color: s.color }} />
+                </div>
               </div>
-              <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">Menunggu Persetujuan</p>
-            </div>
-            <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-600 dark:text-amber-400">
-              <Clock size={20} />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-hairline shadow-soft bg-gradient-to-br from-success/5 via-transparent to-transparent">
-          <CardContent className="flex items-center justify-between p-5">
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Disetujui</p>
-              <div className="text-3xl font-bold font-mono mt-1 text-success">{totalApproved.toLocaleString('id-ID')}</div>
-              <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">Terverifikasi Aktif</p>
-            </div>
-            <div className="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center text-success">
-              <CheckCircle2 size={20} />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-hairline shadow-soft bg-gradient-to-br from-destructive/5 via-transparent to-transparent">
-          <CardContent className="flex items-center justify-between p-5">
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Ditolak (Revisi)</p>
-              <div className="text-3xl font-bold font-mono mt-1 text-destructive">{totalRejected.toLocaleString('id-ID')}</div>
-              <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">Perlu Perbaikan Data</p>
-            </div>
-            <div className="w-10 h-10 rounded-lg bg-destructive/10 flex items-center justify-center text-destructive">
-              <XCircle size={20} />
-            </div>
-          </CardContent>
-        </Card>
+              <div className="flex items-baseline justify-between mt-1.5 w-full">
+                <span className="text-2xl font-bold font-mono tracking-tight" style={{ color: s.color }}>
+                  {s.value.toLocaleString('id-ID')}
+                </span>
+                <span className="text-[10px] text-muted-foreground font-medium text-right leading-tight">{s.sub}</span>
+              </div>
+              {isActive && (
+                <p className="text-[10px] text-[var(--color-primary)] font-medium mt-1">Filter aktif ✓</p>
+              )}
+            </button>
+          )
+        })}
       </div>
 
-      {/* Filter Tabs & Toolbar */}
-      <div className="space-y-4">
-        {/* Status Tabs */}
-        <div className="flex border-b border-hairline overflow-x-auto gap-2">
-          {[
-            { key: 'ALL', label: 'Semua Tower', count: totalAll },
-            { key: 'PENDING', label: 'Perlu Verifikasi', count: totalPending, badge: 'amber' },
-            { key: 'APPROVED', label: 'Disetujui', count: totalApproved },
-            { key: 'REJECTED', label: 'Ditolak', count: totalRejected },
-          ].map((tab) => {
-            const isActive = statusFilter === tab.key
-            return (
-              <button
-                key={tab.key}
-                onClick={() => { setStatusFilter(tab.key as any); setPage(1) }}
-                className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all shrink-0 ${isActive
-                    ? 'border-primary text-primary'
-                    : 'border-transparent text-muted-foreground hover:text-foreground hover:border-hairline'
-                  }`}
-              >
-                {tab.label}
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${isActive
-                    ? 'bg-primary text-primary-foreground'
-                    : tab.badge === 'amber' && tab.count > 0
-                      ? 'bg-amber-500 text-white'
-                      : 'bg-muted text-muted-foreground'
-                  }`}>
-                  {tab.count}
-                </span>
-              </button>
-            )
-          })}
+      {/* Level 4: Search & Smart Filter + View Mode Switcher */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1">
+          {/* Search Input */}
+          <div className="relative flex-1 max-w-md">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Cari nama tower, deskripsi, atau pemohon..."
+              value={searchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              className="pl-9 h-9 text-sm"
+            />
+          </div>
+
+          {/* Smart Select Kecamatan */}
+          <SearchableSelect
+            options={allKecamatans.map(k => ({ value: k.id, label: k.nama }))}
+            value={filterKecId}
+            onChange={(val) => { setFilterKecId(val); setFilterDesaId(''); setPage(1) }}
+            placeholder="-- Semua Kecamatan --"
+            searchPlaceholder="Cari kecamatan..."
+            className="h-9 text-xs w-full sm:w-[170px]"
+          />
+
+          {/* Smart Select Desa (filtered by kecamatan) */}
+          <SearchableSelect
+            options={filterDesas.map(d => ({ value: d.id, label: d.nama }))}
+            value={filterDesaId}
+            onChange={(val) => { setFilterDesaId(val); setPage(1) }}
+            placeholder="-- Semua Desa --"
+            searchPlaceholder="Cari desa..."
+            disabled={!filterKecId}
+            className="h-9 text-xs w-full sm:w-[170px]"
+          />
+
+          {(filterKecId || filterDesaId || searchQuery || statusFilter !== 'ALL') && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setFilterKecId('')
+                setFilterDesaId('')
+                setSearchQuery('')
+                setStatusFilter('ALL')
+                setPage(1)
+              }}
+              className="h-9 px-2 text-xs text-muted-foreground hover:text-red-500"
+            >
+              <X size={14} className="mr-1" /> Reset Filter
+            </Button>
+          )}
         </div>
 
-        {/* Toolbar: Search, Select Filters & View Mode Switcher */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1">
-            {/* Search Input */}
-            <div className="relative flex-1 max-w-sm">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Cari nama tower, deskripsi, atau pemohon..."
-                value={searchQuery}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                className="pl-9 h-9 text-sm"
-              />
-            </div>
-
-            {/* Select Kecamatan */}
-            <SearchableSelect
-              options={allKecamatans.map(k => ({ value: k.id, label: k.nama }))}
-              value={filterKecId}
-              onChange={(val) => { setFilterKecId(val); setFilterDesaId(''); setPage(1) }}
-              placeholder="-- Semua Kecamatan --"
-              searchPlaceholder="Cari kecamatan..."
-              className="h-9 text-xs w-full sm:w-[170px]"
-            />
-
-            {/* Select Desa */}
-            <SearchableSelect
-              options={filterDesas.map(d => ({ value: d.id, label: d.nama }))}
-              value={filterDesaId}
-              onChange={(val) => { setFilterDesaId(val); setPage(1) }}
-              placeholder="-- Semua Desa --"
-              searchPlaceholder="Cari desa..."
-              disabled={!filterKecId}
-              className="h-9 text-xs w-full sm:w-[170px]"
-            />
-
-            {(filterKecId || filterDesaId || searchQuery || statusFilter !== 'ALL') && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setFilterKecId('')
-                  setFilterDesaId('')
-                  setSearchQuery('')
-                  setStatusFilter('ALL')
-                  setPage(1)
-                }}
-                className="h-9 px-2 text-xs text-muted-foreground"
-              >
-                Reset Filter
-              </Button>
-            )}
-          </div>
-
-          {/* View Mode Toggle Switch (Grid vs Table vs Map) */}
-          <div className="flex items-center border border-hairline rounded-lg p-0.5 bg-[var(--color-surface)] shadow-xs shrink-0 self-end sm:self-auto">
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${viewMode === 'grid'
-                  ? 'bg-primary text-primary-foreground shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground'
-                }`}
-              title="Tampilan Kartu (Notion Style)"
-            >
-              <LayoutGrid size={14} /> Kartu
-            </button>
-            <button
-              onClick={() => setViewMode('table')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${viewMode === 'table'
-                  ? 'bg-primary text-primary-foreground shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground'
-                }`}
-              title="Tampilan Tabel Ringkas"
-            >
-              <List size={14} /> Tabel
-            </button>
-            <button
-              onClick={() => setViewMode('map')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${viewMode === 'map'
-                  ? 'bg-primary text-primary-foreground shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground'
-                }`}
-              title="Tampilan Peta"
-            >
-              <Map size={14} /> Peta
-            </button>
-          </div>
+        {/* View Mode Switcher */}
+        <div className="flex items-center border border-[var(--color-hairline)] rounded-lg p-0.5 bg-[var(--color-surface)] shadow-xs shrink-0 self-end sm:self-auto">
+          <button
+            onClick={() => setViewMode('grid')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${viewMode === 'grid' ? 'bg-[var(--color-primary)] text-white shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
+            title="Tampilan Kartu"
+          >
+            <LayoutGrid size={14} /> Kartu
+          </button>
+          <button
+            onClick={() => setViewMode('table')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${viewMode === 'table' ? 'bg-[var(--color-primary)] text-white shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
+            title="Tampilan Tabel"
+          >
+            <List size={14} /> Tabel
+          </button>
+          <button
+            onClick={() => setViewMode('map')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${viewMode === 'map' ? 'bg-[var(--color-primary)] text-white shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
+            title="Tampilan Peta"
+          >
+            <Map size={14} /> Peta
+          </button>
         </div>
       </div>
 
